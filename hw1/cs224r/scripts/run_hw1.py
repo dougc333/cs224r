@@ -83,7 +83,7 @@ def main():
     # Sets the number of gradient steps for training policy (per iter in n_iter)
     parser.add_argument('--num_agent_train_steps_per_iter', type=int,
         default=1000)
-    parser.add_argument('--n_iter', '-n', type=int, default=10)
+    parser.add_argument('--n_iter', '-n', type=int, default=20)
 
     # Amount of training data collected (in the env) during each iteration
     # To get a standard deviation, make sure batch size is N times the
