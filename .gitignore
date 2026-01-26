@@ -95,3 +95,9 @@ Thumbs.db
 # Ruff / formatting
 # ======================
 .ruff_cache/
+
+# TensorBoard logs
+**/events.out.tfevents.*
+**/runs/
+# (optional) ignore all hw data
+hw1/data/
