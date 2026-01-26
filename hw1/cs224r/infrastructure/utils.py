@@ -121,20 +121,33 @@ def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False):
 ############################################
 ############################################
 
-def Path(obs, image_obs, acs, rewards, next_obs, terminals):
-    """
-        Take information (separate arrays) from a single rollout
-        and return it in a single dictionary
-    """
-    if image_obs != []:
-        image_obs = np.stack(image_obs, axis=0)
-    return {"observation" : np.array(obs, dtype=np.float32),
-            "image_obs" : np.array(image_obs, dtype=np.uint8),
-            "reward" : np.array(rewards, dtype=np.float32),
-            "action" : np.array(acs, dtype=np.float32),
-            "next_observation": np.array(next_obs, dtype=np.float32),
-            "terminal": np.array(terminals, dtype=np.float32)}
+# def Path(obs, image_obs, acs, rewards, next_obs, terminals):
+#     """
+#         Take information (separate arrays) from a single rollout
+#         and return it in a single dictionary
+#     """
+#     if image_obs != []:
+#         image_obs = np.stack(image_obs, axis=0)
+#     return {"observation" : np.array(obs, dtype=np.float32),
+#             "image_obs" : np.array(image_obs, dtype=np.uint8),
+#             "reward" : np.array(rewards, dtype=np.float32),
+#             "action" : np.array(acs, dtype=np.float32),
+#             "next_observation": np.array(next_obs, dtype=np.float32),
+#             "terminal": np.array(terminals, dtype=np.float32)}
 
+def Path(obs, image_obs, acs, rewards, next_obs, terminals):
+    if isinstance(image_obs, list):
+        image_obs = np.array(image_obs, dtype=np.uint8) if len(image_obs) > 0 else None
+
+    path = {
+        "observation": np.array(obs, dtype=np.float32),
+        "image_obs": image_obs,  # None or np.ndarray
+        "action": np.array(acs, dtype=np.float32),
+        "reward": np.array(rewards, dtype=np.float32),
+        "next_observation": np.array(next_obs, dtype=np.float32),
+        "terminal": np.array(terminals, dtype=np.float32),
+    }
+    return path
 
 def convert_listofrollouts(paths):
     """
