@@ -16,40 +16,43 @@ MJ_ENV_NAMES = ["Ant-v4", "Walker2d-v4", "HalfCheetah-v4", "Hopper-v4"]
 MJ_ENV_KWARGS = {name: {"render_mode": "rgb_array"} for name in MJ_ENV_NAMES}
 MJ_ENV_KWARGS["Ant-v4"]["use_contact_forces"] = True
 
+# 
 def sample_trajectory(env, policy, max_path_length, render=False):
-    """
-    Rolls out a policy and generates a trajectories
-
-    :param policy: the policy to roll out
-    :param max_path_length: the number of steps to roll out
-    :render: whether to save images from the rollout
-    """
-
+    # ----- reset (new Gym API compatible) -----
     reset_out = env.reset()
     ob = reset_out[0] if isinstance(reset_out, tuple) else reset_out
-    # Initialize data storage for across the trajectory
-    # You'll mainly be concerned with: obs (list of observations), acs (list of actions)
-    obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
+
+    obs, acs, rewards, next_obs, terminals = [], [], [], [], []
+    image_obs = []
     steps = 0
+
     while True:
 
-        # Render image of the simulated environment
+        # ----- rendering (FIXED SHAPE) -----
         if render:
-            if hasattr(env.unwrapped, 'sim'):
-                if 'track' in env.unwrapped.model.camera_names:
-                    image_obs.append(env.unwrapped.sim.render(camera_name='track', height=500, width=500)[::-1])
+            if hasattr(env.unwrapped, "sim"):
+                if "track" in env.unwrapped.model.camera_names:
+                    frame = env.unwrapped.sim.render(
+                        camera_name="track", height=500, width=500
+                    )[::-1]
                 else:
-                    image_obs.append(env.unwrapped.sim.render(height=500, width=500)[::-1])
+                    frame = env.unwrapped.sim.render(
+                        height=500, width=500
+                    )[::-1]
             else:
-                image_obs.append(env.render())
+                frame = env.render()
 
-        # Use the most recent observation to decide what to do
+            # CRITICAL FIX: add camera dimension
+            image_obs.append(frame[None, ...])   # (1, H, W, 3)
+
         obs.append(ob)
-        ac = policy.get_action(ob) # HINT: Query the policy's get_action function
+
+        # policy expects (obs,) or (1, obs)
+        ac = policy.get_action(ob)
         ac = ac[0]
         acs.append(ac)
 
-        # Take that action and record results
+        # ----- step (new Gym API compatible) -----
         step_out = env.step(ac)
         if len(step_out) == 4:
             ob_next, rew, done, _ = step_out
@@ -57,21 +60,29 @@ def sample_trajectory(env, policy, max_path_length, render=False):
             ob_next, rew, terminated, truncated, _ = step_out
             done = terminated or truncated
 
-        # Record result of taking that action
-        steps += 1
-        next_obs.append(ob_next)
         rewards.append(rew)
+        next_obs.append(ob_next)
 
-        # TODO end the rollout if the rollout ended
-        # HINT: rollout can end due to done, or due to max_path_length
-        rollout_done = 1 if done or steps >= max_path_length else 0 # HINT: this is either 0 or 1
-        terminals.append(rollout_done)
+        rollout_done = done or steps >= max_path_length
+        terminals.append(int(rollout_done))
 
         ob = ob_next
+        steps += 1
+
         if rollout_done:
             break
 
-    return Path(obs, image_obs, acs, rewards, next_obs, terminals)
+    # ----- stack arrays -----
+    image_obs = np.array(image_obs, dtype=np.uint8) if render else None
+
+    return Path(
+        obs,
+        image_obs,      # shape: (T, 1, H, W, 3)
+        acs,
+        rewards,
+        next_obs,
+        terminals,
+    )
 
 def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, render=False):
     """
