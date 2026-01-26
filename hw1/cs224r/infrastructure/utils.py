@@ -24,9 +24,9 @@ def sample_trajectory(env, policy, max_path_length, render=False):
     :param max_path_length: the number of steps to roll out
     :render: whether to save images from the rollout
     """
-    # Initialize environment for the beginning of a new rollout
-    ob = env.reset() # HINT: should be the output of resetting the env
 
+    reset_out = env.reset()
+    ob = reset_out[0] if isinstance(reset_out, tuple) else reset_out
     # Initialize data storage for across the trajectory
     # You'll mainly be concerned with: obs (list of observations), acs (list of actions)
     obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
@@ -50,11 +50,16 @@ def sample_trajectory(env, policy, max_path_length, render=False):
         acs.append(ac)
 
         # Take that action and record results
-        ob, rew, done, _ = env.step(ac)
+        step_out = env.step(ac)
+        if len(step_out) == 4:
+            ob_next, rew, done, _ = step_out
+        else:
+            ob_next, rew, terminated, truncated, _ = step_out
+            done = terminated or truncated
 
         # Record result of taking that action
         steps += 1
-        next_obs.append(ob)
+        next_obs.append(ob_next)
         rewards.append(rew)
 
         # TODO end the rollout if the rollout ended
@@ -62,6 +67,7 @@ def sample_trajectory(env, policy, max_path_length, render=False):
         rollout_done = 1 if done or steps >= max_path_length else 0 # HINT: this is either 0 or 1
         terminals.append(rollout_done)
 
+        ob = ob_next
         if rollout_done:
             break
 
