@@ -1,11 +1,23 @@
 .DS_Store
+
+
+# TensorBoard / training logs
+**/events.out.tfevents.*
+**/runs/
+**/tb/
+**/tensorboard/
+
+# CS224R hw artifacts (optional but recommended)
+hw1/data/
+
+
 # ======================
 # Python
 # ======================
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.local
 # ======================
 # Virtual environments
 # ======================
