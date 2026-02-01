@@ -74,6 +74,7 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         )
         self.mean_net.to(ptu.device)
         self.logstd = nn.Parameter(
+
             torch.zeros(self.ac_dim, dtype=torch.float32, device=ptu.device)
         )
         self.logstd.to(ptu.device)
@@ -98,16 +99,13 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         :return:
             action: sampled action(s) from the policy
         """
-        if obs.ndim == 1:
-            obs = obs[None] # [1, ob_dim]
+        if len(obs.shape) > 1:
+            observation = obs
+        else:
+            observation = obs[None]
 
-        obs_t = ptu.from_numpy(obs) # numpy -> torch on correct device
-
-        with torch.no_grad():
-            act_t = self.mean_net(obs_t)   # [1, ac_dim]
-
-        act = ptu.to_numpy(act_t).astype(np.float32)  # keep [1, ac_dim]
-        return act        #raise NotImplementedError
+        # TODO return the action that the policy prescribes
+        raise NotImplementedError
 
     def forward(self, observation: torch.FloatTensor) -> Any:
         """
@@ -122,8 +120,8 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         # through it. For example, you can return a torch.FloatTensor. You can also
         # return more flexible objects, such as a
         # `torch.distributions.Distribution` object. It's up to you!
-        return self.mean_net(observation)
-        #raise NotImplementedError
+        
+        raise NotImplementedError
 
     def update(self, observations, actions):
         """
@@ -136,18 +134,9 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         """
         # TODO: update the policy and return the loss. Recall that to update the policy
         # you need to backpropagate the gradient and step the optimizer.
-         # Convert numpy -> torch if needed
-        if isinstance(observations, np.ndarray):
-            observations = ptu.from_numpy(observations)
-        if isinstance(actions, np.ndarray):
-            actions = ptu.from_numpy(actions)
+        loss = TODO
 
-        pred_actions = self.mean_net(observations) # [batch_size, ac_dim]
-        loss = F.mse_loss(pred_actions, actions)
-
-        self.optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        self.optimizer.step()
-
-        return {"Training Loss": ptu.to_numpy(loss)}
+        return {
+            'Training Loss': ptu.to_numpy(loss),
+        }
 

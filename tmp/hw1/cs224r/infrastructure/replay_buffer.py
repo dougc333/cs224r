@@ -127,16 +127,8 @@ class ReplayBuffer():
         ## (i.e., not different indices from each array)
         ## HINT 3: look at the sample_recent_data function below
         ## Note that rews, next_obs, and terminals are not used for BC
-        indices = np.random.permutation(self.obs.shape[0])[:batch_size]
-        # print(f"sample_random_data indices: {indices}")
-        # print(f"sample_random_data obs: {self.obs[indices]}")
-        # print(f"sample_random_data acs: {self.acs[indices]}")
-        # print(f"sample_random_data rews: {self.rews[indices]}")
-        # print(f"sample_random_data next_obs: {self.next_obs[indices]}")
-        # print(f"sample_random_data terminals: {self.terminals[indices]}")
-        return (self.obs[indices], self.acs[indices], self.rews[indices], self.next_obs[indices], self.terminals[indices])  
-        
-        #raise NotImplementedError
+
+        raise NotImplementedError
     
     def sample_recent_data(self, batch_size=1):
         """

@@ -12,7 +12,6 @@ before running this file, as it is a dependency of this file
 
 from collections import OrderedDict
 
-import os
 import pickle
 import time
 import torch
@@ -87,7 +86,6 @@ class BCTrainer:
         self.env.reset(seed=seed)
 
         # Set the maximum length for episodes and videos
-        # this is never set???
         self.params['ep_len'] = self.params['ep_len'] or self.env.spec.max_episode_steps
         MAX_VIDEO_LEN = self.params['ep_len']
 
@@ -207,36 +205,17 @@ class BCTrainer:
         # HINT3: To collect data, you might want to use pre-existing sample_trajectories code from utils
         # HINT4: You want each of these collected rollouts to be of length self.params['ep_len']
 
-        # print("\nCollecting data to be used for training...")
-        # paths, envsteps_this_batch = utils.sample_trajectories(self.env, collect_policy, self.params['batch_size'], self.params['ep_len'])
-
-        # # collect more rollouts with the same policy, to be saved as videos in tensorboard
-        # # note: here, we collect MAX_NVIDEO rollouts, each of length MAX_VIDEO_LEN
-        # train_video_paths = None
-        # if self.log_video:            
-        #     ## TODO look in utils and implement sample_n_trajectories
-        #     print('\nCollecting train rollouts to be used for saving videos...')
-        #     train_video_paths = utils.sample_n_trajectories(self.env,
-        #         collect_policy, MAX_NVIDEO, MAX_VIDEO_LEN, True)
-
         print("\nCollecting data to be used for training...")
+        paths, envsteps_this_batch = TODO
 
-        if itr == 0 and load_initial_expertdata is not None and os.path.exists(load_initial_expertdata):
-            print(f"Loading expert data from: {load_initial_expertdata}")
-            with open(load_initial_expertdata, "rb") as f:
-               paths = pickle.load(f)  # usually a list of path dicts
-            envsteps_this_batch = sum(len(p["reward"]) for p in paths)
-        else:
-            paths, envsteps_this_batch = utils.sample_trajectories(
-                self.env, collect_policy, self.params["batch_size"], self.params["ep_len"]
-            )
-
+        # collect more rollouts with the same policy, to be saved as videos in tensorboard
+        # note: here, we collect MAX_NVIDEO rollouts, each of length MAX_VIDEO_LEN
         train_video_paths = None
-        if self.log_video:
-            print("\nCollecting train rollouts to be used for saving videos...")
-            train_video_paths = utils.sample_n_trajectories(
-                self.env, collect_policy, MAX_NVIDEO, MAX_VIDEO_LEN, True
-            )
+        if self.log_video:            
+            ## TODO look in utils and implement sample_n_trajectories
+            print('\nCollecting train rollouts to be used for saving videos...')
+            train_video_paths = utils.sample_n_trajectories(self.env,
+                collect_policy, MAX_NVIDEO, MAX_VIDEO_LEN, True)
 
         return paths, envsteps_this_batch, train_video_paths
 
@@ -247,16 +226,16 @@ class BCTrainer:
         print('\nTraining agent using sampled data from replay buffer...')
         all_logs = []
         for train_step in range(self.params['num_agent_train_steps_per_iter']):
-            print(f"Training agent using sampled data from replay buffer... {train_step}")
+
             # TODO sample some data from the data buffer
             # HINT1: use the agent's sample function
             # HINT2: how much data = self.params['train_batch_size']
-            ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = self.agent.sample(self.params['train_batch_size'])
+            ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = TODO
 
             # TODO use the sampled data to train an agent
             # HINT: use the agent's train function
             # HINT: keep the agent's training log for debugging
-            train_log = self.agent.train(ob_batch, ac_batch)
+            train_log = TODO
             all_logs.append(train_log)
         return all_logs
 
@@ -268,30 +247,13 @@ class BCTrainer:
         :param paths: paths to relabel
         """
         expert_policy.to(ptu.device)
-        #print("\nDAGGAR Relabelling collected observations with labels from an expert policy...")
-        debug_path = paths[0]
-        t = 0
-
-        obs = debug_path["observation"][t]
-        old_action = debug_path["action"][t].copy()
-
-        expert_action = expert_policy.get_action(obs)[0]
-        debug_path["action"][t] = expert_action
-
-        print("[DAgger DEBUG]")
-        print("  obs shape:", obs.shape)
-        print("  old (policy) action:", old_action)
-        print("  expert action:", expert_action)
-        print("  action replaced:", np.allclose(debug_path["action"][t], expert_action))
+        print("\nRelabelling collected observations with labels from an expert policy...")
 
         # TODO relabel collected obsevations (from our policy) with labels from an expert policy
         # HINT: query the policy (using the get_action function) with paths[i]["observation"]
         # and replace paths[i]["action"] with these expert labels
-       
-        for path in paths:
-            for i in range(len(path["observation"])):
-                path["action"][i] = expert_policy.get_action(path["observation"][i])[0]
-        return paths
+
+        raise NotImplementedError
 
     ####################################
     ####################################

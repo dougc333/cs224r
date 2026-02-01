@@ -28,43 +28,61 @@ def sample_trajectory(env, policy, max_path_length, render=False):
 
     while True:
 
-        # Render image of the simulated environment
+        # ----- rendering (FIXED SHAPE) -----
         if render:
-            if hasattr(env.unwrapped, 'sim'):
-                if 'track' in env.unwrapped.model.camera_names:
-                    frame_track = env.unwrapped.sim.render(camera_name='track', height=500, width=500)[::-1]
-                    print(f"frame_track shape: {frame_track.shape}")
-                    image_obs.append(frame_track)
+            if hasattr(env.unwrapped, "sim"):
+                if "track" in env.unwrapped.model.camera_names:
+                    frame = env.unwrapped.sim.render(
+                        camera_name="track", height=500, width=500
+                    )[::-1]
                 else:
-                    frame_else = env.unwrapped.sim.render(height=500, width=500)[::-1]
-                    print(f"frame_else shape: {frame_else.shape}")
-                    image_obs.append(frame_else)
+                    frame = env.unwrapped.sim.render(
+                        height=500, width=500
+                    )[::-1]
             else:
-                image_obs.append(env.render())
+                frame = env.render()
 
-        # Use the most recent observation to decide what to do
+            # CRITICAL FIX: add camera dimension
+            image_obs.append(frame[None, ...])   # (1, H, W, 3)
+
         obs.append(ob)
-        ac = policy.get_action(ob) # HINT: Query the policy's get_action function
+
+        # policy expects (obs,) or (1, obs)
+        ac = policy.get_action(ob)
         ac = ac[0]
         acs.append(ac)
 
-        # Take that action and record results
-        ob, rew, done, _ = env.step(ac)
+        # ----- step (new Gym API compatible) -----
+        step_out = env.step(ac)
+        if len(step_out) == 4:
+            ob_next, rew, done, _ = step_out
+        else:
+            ob_next, rew, terminated, truncated, _ = step_out
+            done = terminated or truncated
 
-        # Record result of taking that action
-        steps += 1
-        next_obs.append(ob)
         rewards.append(rew)
+        next_obs.append(ob_next)
 
-        # TODO end the rollout if the rollout ended
-        # HINT: rollout can end due to done, or due to max_path_length
-        rollout_done = done or steps >= max_path_length # HINT: this is either 0 or 1
-        terminals.append(rollout_done)
+        rollout_done = done or steps >= max_path_length
+        terminals.append(int(rollout_done))
+
+        ob = ob_next
+        steps += 1
 
         if rollout_done:
             break
 
-    return Path(obs, image_obs, acs, rewards, next_obs, terminals)
+    # ----- stack arrays -----
+    image_obs = np.array(image_obs, dtype=np.uint8) if render else None
+
+    return Path(
+        obs,
+        image_obs,      # shape: (T, 1, H, W, 3)
+        acs,
+        rewards,
+        next_obs,
+        terminals,
+    )
 
 def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, render=False):
     """
@@ -118,21 +136,18 @@ def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False):
 #             "terminal": np.array(terminals, dtype=np.float32)}
 
 def Path(obs, image_obs, acs, rewards, next_obs, terminals):
-    """
-        Take information (separate arrays) from a single rollout
-        and return it in a single dictionary
-    """
-    if image_obs != []:
-        print(f"image_obs len: {len(image_obs)}")
-        #image_obs = np.stack(image_obs, axis=0)
-        for i in range(len(image_obs)):
-            print(f"image_obs:{image_obs[i]}")
-    return {"observation" : np.array(obs, dtype=np.float32),
-            "image_obs" : np.array(image_obs, dtype=np.uint8),
-            "reward" : np.array(rewards, dtype=np.float32),
-            "action" : np.array(acs, dtype=np.float32),
-            "next_observation": np.array(next_obs, dtype=np.float32),
-            "terminal": np.array(terminals, dtype=np.float32)}
+    if isinstance(image_obs, list):
+        image_obs = np.array(image_obs, dtype=np.uint8) if len(image_obs) > 0 else None
+
+    path = {
+        "observation": np.array(obs, dtype=np.float32),
+        "image_obs": image_obs,  # None or np.ndarray
+        "action": np.array(acs, dtype=np.float32),
+        "reward": np.array(rewards, dtype=np.float32),
+        "next_observation": np.array(next_obs, dtype=np.float32),
+        "terminal": np.array(terminals, dtype=np.float32),
+    }
+    return path
 
 def convert_listofrollouts(paths):
     """

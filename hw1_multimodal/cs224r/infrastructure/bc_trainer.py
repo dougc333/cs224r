@@ -268,26 +268,12 @@ class BCTrainer:
         :param paths: paths to relabel
         """
         expert_policy.to(ptu.device)
-        #print("\nDAGGAR Relabelling collected observations with labels from an expert policy...")
-        debug_path = paths[0]
-        t = 0
-
-        obs = debug_path["observation"][t]
-        old_action = debug_path["action"][t].copy()
-
-        expert_action = expert_policy.get_action(obs)[0]
-        debug_path["action"][t] = expert_action
-
-        print("[DAgger DEBUG]")
-        print("  obs shape:", obs.shape)
-        print("  old (policy) action:", old_action)
-        print("  expert action:", expert_action)
-        print("  action replaced:", np.allclose(debug_path["action"][t], expert_action))
+        print("\nRelabelling collected observations with labels from an expert policy...")
 
         # TODO relabel collected obsevations (from our policy) with labels from an expert policy
         # HINT: query the policy (using the get_action function) with paths[i]["observation"]
         # and replace paths[i]["action"] with these expert labels
-       
+        print(f"bc_trainer paths: {paths}")
         for path in paths:
             for i in range(len(path["observation"])):
                 path["action"][i] = expert_policy.get_action(path["observation"][i])[0]
