@@ -1,6 +1,6 @@
 .DS_Store
 
-
+book/_build/
 # TensorBoard / training logs
 **/events.out.tfevents.*
 **/runs/
