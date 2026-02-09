@@ -1,0 +1,7 @@
+format: jb-book
+root: intro
+chapters:
+  - file: notebooks/01_intro
+  - file: notebooks/02_training
+  - file: notebooks/03_eval
+  - file: notes/extra_reading
