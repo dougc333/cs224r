@@ -1,13 +1,24 @@
 Installation directions
 
-1) go to colab, open a terminal, ssh-keygen, copy pub key to github ssh repo key to enable clones and commits
+Creating expert trajectories requires colab gpus. 
+- pick a new gymnasium env like reacher. 
+- train using a known baseline, ie PPO from stablebaselines3
+- record trajectories. 
+
+This process creates the expert data for BC using  supervised learning to set the  policy. 
+Fine tune after BC with PPO.  
+
+How to run cs224r repo under colab: 
+Clone the repo under colab to get the datasets
+The problem is you have to create a new ssh key everytime a new VM is created. When switching to high-ram CPUs, or adding a GPU will reset the VM. 
+
+1) go to colab, open a terminal, ssh-keygen, copy pub key to github ssh repo key to github/settings enable clones and commits
 
 2) clone to /content. Cloning to /drive/MyDrive/'Colab Notebooks' introduces the FUSE filesystem which is a network file system and not suitable for running colab vms on. 
 
 3) copy back to Colab Notebooks or commit to git repo. 
 
  
-
 
 We have 3  envs
 1) for macbook conda to run the .mp4 creation from expert data and to use SB3 libs for BC and DAgger. 
