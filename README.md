@@ -1,4 +1,4 @@
-Installation directions
+
 
 Creating expert trajectories requires colab gpus. 
 - pick a new gymnasium env like reacher. 

@@ -1,14 +1,23 @@
 format: jb-book
 root: intro
+
+parts:
+  - caption: Reinforcement Learning
+    Reading pkl files:
+      - file: notebooks/read_pkl.ipynb
+      - file: notebooks/schema_ant_expert_data.ipynb
+    Expert Trajectories:
+      - file: notebooks/mp4_from_expert_data
+      - file: notebooks/reacher_expert_traj
+
+  - caption: Expert Policies
+    chapters:
+      - file: notebooks/ant_policy.ipynb
+
 chapters:
-  - file: notebooks/ant_policy.ipynb
   - file: notebooks/ant_rl.ipynb
   - file: notebooks/cs224r_hw1.ipynb
-  - file: notebooks/hopper_bc.ipynb
   - file: notebooks/loadsafetensors.ipynb
   - file: notebooks/mnist_rl.ipynb
-  - file: notebooks/mp4_from_expert_data.ipynb
-  - file: notebooks/reacher_expert_traj.ipynb
   - file: notebooks/sb3_hopper.ipynb
-  - file: notebooks/schema_ant_expert_data.ipynb
   - file: notebooks/thompson.ipynb
