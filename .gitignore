@@ -1,23 +1,17 @@
+# ======================
+# OS / System
+# ======================
 .DS_Store
-
-book/_build/
-# TensorBoard / training logs
-**/events.out.tfevents.*
-**/runs/
-**/tb/
-**/tensorboard/
-
-# CS224R hw artifacts (optional but recommended)
-hw1/data/
-
+Thumbs.db
 
 # ======================
-# Python
+# Python cache / compiled
 # ======================
 __pycache__/
 *.py[cod]
 *$py.class
 *.local
+
 # ======================
 # Virtual environments
 # ======================
@@ -28,24 +22,58 @@ ENV/
 .env
 
 # ======================
-# Packaging / build
+# Build / Packaging
 # ======================
 build/
 dist/
-develop-eggs/
-eggs/
+.eggs/
 *.egg-info/
 .installed.cfg
 *.egg
+develop-eggs/
 
 # ======================
-# PyInstaller
+# Jupyter
 # ======================
-*.manifest
-*.spec
+.ipynb_checkpoints/
 
 # ======================
-# Unit test / coverage
+# Jupyter Book / MyST / Sphinx
+# ======================
+book/_build/
+_build/
+
+# ======================
+# Training / TensorBoard / Experiment Logs
+# ======================
+**/events.out.tfevents.*
+**/runs/
+**/tb/
+**/tensorboard/
+
+# ======================
+# CS224R / Homework data artifacts
+# ======================
+hw1/data/
+
+# ======================
+# Logs / Databases
+# ======================
+*.log
+*.sqlite3
+*.db
+
+# ======================
+# IDE / Editors
+# ======================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ======================
+# Testing / Coverage
 # ======================
 htmlcov/
 .tox/
@@ -58,50 +86,15 @@ nosetests.xml
 coverage.xml
 
 # ======================
-# Logs & databases
-# ======================
-*.log
-*.sqlite3
-*.db
-
-# ======================
-# Jupyter
-# ======================
-.ipynb_checkpoints/
-
-# ======================
-# IDEs / editors
-# ======================
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# ======================
-# OS files
-# ======================
-.DS_Store
-Thumbs.db
-
-# ======================
-# Mypy / type checking
+# Type checking / lint caches
 # ======================
 .mypy_cache/
 .pyre/
 .pytype/
-
-# ======================
-# Ruff / formatting
-# ======================
 .ruff_cache/
 
-# TensorBoard logs
-**/events.out.tfevents.*
-**/runs/
-# (optional) ignore all hw data
-hw1/data/
-
-# MyST build outputs
-_build
-book/_build/
+# ======================
+# PyInstaller
+# ======================
+*.manifest
+*.spec
