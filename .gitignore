@@ -101,3 +101,7 @@ Thumbs.db
 **/runs/
 # (optional) ignore all hw data
 hw1/data/
+
+# MyST build outputs
+_build
+book/_build/
