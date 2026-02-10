@@ -1,7 +1,14 @@
 format: jb-book
 root: intro
 chapters:
-  - file: notebooks/01_intro
-  - file: notebooks/02_training
-  - file: notebooks/03_eval
-  - file: notes/extra_reading
+  - file: notebooks/ant_policy.ipynb
+  - file: notebooks/ant_rl
+  - file: notebooks/cs224r_hw1
+  - file: notebooks/hopper_bc
+  - file: notebooks/loadsafetensors
+  - file: notebooks/mnist_rl
+  - file: notebooks/mp4_from_expert_data
+  - file: notebooks/reacher_expert_traj
+  - file: notebooks/sb3_hopper
+  - file: notebooks/schema_ant_expert_data
+  - file: notebooks/thompson
