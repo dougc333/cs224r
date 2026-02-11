@@ -8,7 +8,7 @@ parts:
       - file: notebooks/schema_ant_expert_data.ipynb
       - file: notebooks/mp4_from_expert_data.ipynb
       - file: notebooks/reacher_expert_traj.ipynb
-
+      - file: notebooks/optuna.ipynb
   - caption: Supervised Learning and PPO
     chapters: 
       - file: notebooks/ant_policy.ipynb
