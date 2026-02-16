@@ -2,19 +2,23 @@ format: jb-book
 root: intro.md
 
 parts:
-  - caption: RL Distributions and Policies 
+  - caption: Exploring Expert Data and Policies
     chapters:
       - file: notebooks/read_pkl.ipynb
       - file: notebooks/schema_ant_expert_data.ipynb
       - file: notebooks/mp4_from_expert_data.ipynb
       - file: notebooks/reacher_expert_traj.ipynb
-      - file: notebooks/optuna.ipynb
-  - caption: Supervised Learning and PPO
-    chapters: 
+  - caption: Training Policies with BC and DAgger
+    chapters:
+      - file: notebooks/bc_daggar.ipynb
+  - caption: Ant Policies and RL Experiments
+    chapters:
       - file: notebooks/ant_policy.ipynb
       - file: notebooks/ant_rl.ipynb
       - file: notebooks/cs224r_hw1.ipynb
-      - file: notebooks/loadsafetensors.ipynb
       - file: notebooks/mnist_rl.ipynb
       - file: notebooks/sb3_hopper.ipynb
-      - file: notebooks/thompson.ipynb
+  - caption: hyperparameter tuning
+    chapters:
+      - file: notebooks/raytune_population.ipynb
+      - file: notebooks/optuna.ipynb
