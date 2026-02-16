@@ -14,7 +14,7 @@ parts:
   - caption: Ant Policies and RL Experiments
     chapters:
       - file: notebooks/ant_policy.ipynb
-      - file: notebooks/ant_rl.ipynb
+      - file: notebooks/ant_rl_v1.ipynb
       - file: notebooks/cs224r_hw1.ipynb
       - file: notebooks/mnist_rl.ipynb
       - file: notebooks/sb3_hopper.ipynb
