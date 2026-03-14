@@ -113,7 +113,7 @@ class TruncatedNormal(pyd.Normal):
     def sample(self, clip=None, sample_shape=torch.Size()):
         shape = self._extended_shape(sample_shape)
         eps = _standard_normal(shape,
-                               dtype=self.loc.dtype,
+                                dtype=self.loc.dtype,
                                device=self.loc.device)
         eps *= self.scale
         if clip is not None:
