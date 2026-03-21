@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
   }
 #endif
   absl::ParseCommandLine(argc, argv);
-
+  std::cout<<"argc:"<<argc<<"argv:"<<argv<<std::endl;
   mjpc::StartApp(mjpc::GetTasks(), 6);  // start with manipiulation bring
   return 0;
 }

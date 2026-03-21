@@ -1,17 +1,9 @@
  Overview
-This codebase makes small modifications to the original MuJoCo MPC software application (https://github.com/deepmind/mujoco_mpc).
 
-### Setup
-We assume you are using an AWS EC2 c4.4xlarge instance.
-You need to run this line each time you start a new session
-`xvfb-run -a -s "-screen 0 1400x900x24" bash`
+There are no mac install instructions
+these are modified after debugging the mujoco_mpc to work on mac
 
-If you don't, you may seed this error
-```
-ERROR: could not initialize GLFW
 
-Press Enter to exit ...
-```
 
 ### Run an example
 ```
@@ -19,19 +11,11 @@ Press Enter to exit ...
 --horizon=0.35 --w0=0.0 --w1=0.0 --w2=0.0 --w3=0.0
 ```
 
-The expected result should be
-```
-MuJoCo version 2.3.3
-Hardware threads: 16
-Agent threads: 13
-```
-There should also be a new video generated in `mujoco_mpc/videos`.
+brew install cmake 
+brew install zlib
+brew install ninja
+brew install clang-14? 
 
-## Installation
-The following should already be installed if you use the AMI image we provide,
-but we leave these instructions in case something goes wrong.
-
-###
 MacOS install instructions
 MacOS has /usr/bin/clang, and /usr/bin/clang++ dont use these. Wrong version
 MacOS after homebrew installation has clang-14
@@ -47,7 +31,6 @@ dc@dcs-MacBook-Pro mujoco_mpc % ls -al /opt/homebrew/Cellar/llvm@14/14.0.6/bin/c
 lrwxr-xr-x  1 dc  admin  5 Jun 22  2022 /opt/homebrew/Cellar/llvm@14/14.0.6/bin/clang-cpp -> clang
 
 
-### Clone and build OpenCV
 brew install opencv
 
 ### Build MJPC
