@@ -1,3 +1,4 @@
+
 You are an automated agent attempting to find a combination of values of w0, w1, w2, w3 to make a quadruped robot walk in a circle. 
 
 Take the following steps iterate and find a combination of weights which cause the robot to walk in a circle;
