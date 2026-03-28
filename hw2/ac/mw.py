@@ -3,7 +3,7 @@ from typing import Any, NamedTuple
 
 import gym
 import dm_env
-import mujoco_py
+import mujoco
 import numpy as np
 from dm_env import StepType, specs
 

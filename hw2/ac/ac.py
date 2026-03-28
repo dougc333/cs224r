@@ -117,8 +117,27 @@ class ACAgent:
             batch, self.device)
 
         ### YOUR CODE HERE ###
+        with torch.no_grad():
+            next_dist = self.actor(next_obs)
+            next_action = next_dist.sample(clip=self.stddev_clip)
 
+            target_qs = self.critic_target(next_obs, next_action)
+            target_q = torch.min(torch.cat(target_qs, dim=1), dim=1, keepdim=True)[0]
+            target = reward.unsqueeze(-1) + discount.unsqueeze(-1) * target_q
 
+        qs = self.critic(obs, action)
+        critic_loss = sum(F.mse_loss(q, target) for q in qs)
+
+        self.critic_opt.zero_grad(set_to_none=True)
+        critic_loss.backward()
+        self.critic_opt.step()
+
+        utils.soft_update_params(self.critic, self.critic_target, self.critic_target_tau)
+
+        if self.use_tb:
+            metrics['critic_loss'] = critic_loss.item()
+            metrics['target_q'] = target.mean().item()
+            metrics['q'] = torch.cat(qs, dim=1).mean().item()
         #####################
         return metrics
 
@@ -151,7 +170,22 @@ class ACAgent:
             batch, self.device)
 
         ### YOUR CODE HERE ###
+        dist = self.actor(obs)
+        action = dist.sample(clip=self.stddev_clip)
 
+        qs = self.critic(obs, action)
+        q = torch.mean(torch.cat(qs, dim=1), dim=1, keepdim=True)
+
+        actor_loss = -q.mean()
+
+        self.actor_opt.zero_grad(set_to_none=True)
+        actor_loss.backward()
+        self.actor_opt.step()
+
+        if self.use_tb:
+            metrics['actor_loss'] = actor_loss.item()
+            metrics['actor_q'] = q.mean().item()
+            metrics['actor_logprob'] = dist.log_prob(action).sum(-1).mean().item()
 
         return metrics
 
@@ -184,6 +218,15 @@ class ACAgent:
         obs, action, _, _, _ = utils.to_torch(batch, self.device)
 
         ### YOUR CODE HERE ###
+        dist = self.actor(obs)
+        log_prob = dist.log_prob(action).sum(-1)
+        actor_loss = -log_prob.mean()
+        
+        
+        self.actor_opt.zero_grad(set_to_none=True)
+        actor_loss.backward()
+        self.actor_opt.step()
 
-
+        metrics['actor_loss'] = actor_loss.item()
+        metrics['bc_log_prob'] = log_prob.mean().item()
         return metrics
