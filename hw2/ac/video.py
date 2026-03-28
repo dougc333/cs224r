@@ -21,15 +21,21 @@ class VideoRecorder:
         self.record(env)
 
     def record(self, env):
-        if self.enabled:
-            frame = env.render()
+        if not self.enabled:
+            return
+        frame = env.render()
+        print("record frame:", None if frame is None else frame.shape)
+        if frame is not None:
             self.frames.append(frame)
 
     def save(self, file_name):
-        if self.enabled:
-            path = self.save_dir / file_name
-            imageio.mimsave(str(path), self.frames, fps=self.fps)
-
+        if not self.enabled:
+            print("video disabled")
+            return
+        print("saving video:", file_name, "num_frames:", len(self.frames))
+        path = self.save_dir / file_name
+        imageio.mimsave(str(path), self.frames, fps=self.fps)
+        print("saved to:", path)
 
 class TrainVideoRecorder:
     def __init__(self, root_dir, render_size=256, fps=20):
