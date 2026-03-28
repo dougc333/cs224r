@@ -225,7 +225,7 @@ class Workspace:
 
                 if self.global_step % self.cfg.bc_freq == 0:
                     bc_metrics = self.agent.bc(self.demo_iter)
-                    self.logger.log_metrics(bc_metrics, self.global_frame, ty='bc')
+                    self.logger.log_metrics(bc_metrics, self.global_frame, ty='actor')
 
             time_step = self.train_env.step(action)
             episode_reward += float(time_step.reward)
