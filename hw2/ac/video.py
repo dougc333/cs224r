@@ -29,6 +29,7 @@ class VideoRecorder:
             self.frames.append(frame)
 
     def save(self, file_name):
+        print("save called:", file_name)
         if not self.enabled:
             print("video disabled")
             return
@@ -36,6 +37,7 @@ class VideoRecorder:
         path = self.save_dir / file_name
         imageio.mimsave(str(path), self.frames, fps=self.fps)
         print("saved to:", path)
+
 
 class TrainVideoRecorder:
     def __init__(self, root_dir, render_size=256, fps=20):
