@@ -1,15 +1,7 @@
-from collections import deque, OrderedDict
 from typing import Any, NamedTuple
-
-import dm_env
 import numpy as np
 from dm_env import StepType, specs
-
-try:
-    import cv2
-except ImportError:
-    cv2 = None
-
+import cv2
 from metaworld import ALL_V3_ENVIRONMENTS
 
 
@@ -25,11 +17,7 @@ class MetaWorldEnv:
         env_cls = ALL_V3_ENVIRONMENTS[name]
 
         # Meta-World v3 is Gymnasium-like. Prefer rgb_array rendering.
-        try:
-            self._env = env_cls(render_mode="rgb_array")
-        except TypeError:
-            self._env = env_cls()
-
+        self._env = env_cls(render_mode="rgb_array")
         self._env.max_path_length = np.inf
         if hasattr(self._env, "_freeze_rand_vec"):
             self._env._freeze_rand_vec = False
@@ -44,7 +32,7 @@ class MetaWorldEnv:
         self.action_repeat = action_repeat
         self.duration = duration
         self._step = None
-
+        self.last_success = 0.0
         # No mujoco_py viewer in Colab/new mujoco.
         self.viewer = None
         self.render_params = render_params
@@ -101,7 +89,7 @@ class MetaWorldEnv:
         self._step += 1
         if self._step >= self.duration:
             done = True
-
+        self.last_success = float(info.get("success", 0.0))
         return state, np.float32(reward), done, info
 
     

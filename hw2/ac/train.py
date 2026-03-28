@@ -149,7 +149,7 @@ class Workspace:
                 total_reward += time_step.reward
                 step += 1
 
-            total_success += float(time_step.reward > 0.0)
+            total_success += self.eval_env.last_success
             episode += 1
 
         self.video_recorder.save(f'{self.global_frame}.mp4')
