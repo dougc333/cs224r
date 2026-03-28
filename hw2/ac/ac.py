@@ -88,35 +88,18 @@ class ACAgent:
         return action.cpu().numpy()[0]
 
     def update_critic(self, replay_iter):
-        '''
-        This function updates the critic and target critic parameters.
-
-        Args:
-
-        replay_iter:
-            An iterable that produces batches of tuples
-            (observation, action, reward, discount, next_observation),
-            where:
-            observation: array of shape [batch, D] of states
-            action: array of shape [batch, action_dim]
-            reward: array of shape [batch,]
-            discount: array of shape [batch,]
-            next_observation: array of shape [batch, D] of states
-
-        Returns:
-
-        metrics: dictionary of relevant metrics to be logged. Add any metrics
-                 that you find helpful to log for debugging, such as the critic
-                 loss, or the mean Bellman targets.
-        '''
-
         metrics = dict()
 
         batch = next(replay_iter)
         obs, action, reward, discount, next_obs = utils.to_torch(
             batch, self.device)
 
-        ### YOUR CODE HERE ###
+        obs = obs.float()
+        action = action.float()
+        reward = reward.float()
+        discount = discount.float()
+        next_obs = next_obs.float()
+
         with torch.no_grad():
             next_dist = self.actor(next_obs)
             next_action = next_dist.sample(clip=self.stddev_clip)
@@ -138,38 +121,16 @@ class ACAgent:
             metrics['critic_loss'] = critic_loss.item()
             metrics['target_q'] = target.mean().item()
             metrics['q'] = torch.cat(qs, dim=1).mean().item()
-        #####################
+
         return metrics
 
     def update_actor(self, replay_iter):
-        '''
-        This function updates the policy parameters.
-
-        Args:
-
-        replay_iter:
-            An iterable that produces batches of tuples
-            (observation, action, reward, discount, next_observation),
-            where:
-            observation: array of shape [batch, D] of states
-            action: array of shape [batch, action_dim]
-            reward: array of shape [batch,]
-            discount: array of shape [batch,]
-            next_observation: array of shape [batch, D] of states
-
-        Returns:
-
-        metrics: dictionary of relevant metrics to be logged. Add any metrics
-                 that you find helpful to log for debugging, such as the actor
-                 loss.
-        '''
         metrics = dict()
 
         batch = next(replay_iter)
-        obs, _, _, _, _ = utils.to_torch(
-            batch, self.device)
+        obs, _, _, _, _ = utils.to_torch(batch, self.device)
+        obs = obs.float()
 
-        ### YOUR CODE HERE ###
         dist = self.actor(obs)
         action = dist.sample(clip=self.stddev_clip)
 
@@ -187,46 +148,26 @@ class ACAgent:
             metrics['actor_q'] = q.mean().item()
             metrics['actor_logprob'] = dist.log_prob(action).sum(-1).mean().item()
 
-        return metrics
+        return metrics   
+
 
     def bc(self, replay_iter):
-        '''
-        This function updates the policy with end-to-end
-        behavior cloning
-
-        Args:
-
-        replay_iter:
-            An iterable that produces batches of tuples
-            (observation, action, reward, discount, next_observation),
-            where:
-            observation: array of shape [batch, D] of states
-            action: array of shape [batch, action_dim]
-            reward: array of shape [batch,]
-            discount: array of shape [batch,]
-            next_observation: array of shape [batch, D] of states
-
-        Returns:
-
-        metrics: dictionary of relevant metrics to be logged. Add any metrics
-                 that you find helpful to log for debugging, such as the loss.
-        '''
-
         metrics = dict()
-
+    
         batch = next(replay_iter)
         obs, action, _, _, _ = utils.to_torch(batch, self.device)
-
-        ### YOUR CODE HERE ###
+    
+        obs = obs.float()
+        action = action.float()
+    
         dist = self.actor(obs)
         log_prob = dist.log_prob(action).sum(-1)
         actor_loss = -log_prob.mean()
-        
-        
+    
         self.actor_opt.zero_grad(set_to_none=True)
         actor_loss.backward()
         self.actor_opt.step()
-
+    
         metrics['actor_loss'] = actor_loss.item()
         metrics['bc_log_prob'] = log_prob.mean().item()
         return metrics
