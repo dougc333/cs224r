@@ -4,7 +4,6 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 import os
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 os.environ['MUJOCO_GL'] = 'egl'
-#os.environ['MUJOCO_GL'] = 'cgl'
 
 from pathlib import Path
 
@@ -38,50 +37,71 @@ class Workspace:
         self.device = torch.device(cfg.device)
         self.setup()
 
-        self.agent = make_agent(self.train_env.observation_spec(),
-                                self.train_env.action_spec(),
-                                self.cfg.agent)
+        self.agent = make_agent(
+            self.train_env.observation_spec(),
+            self.train_env.action_spec(),
+            self.cfg.agent
+        )
         self.timer = utils.Timer()
         self._global_step = 0
         self._global_episode = 0
 
     def setup(self):
-        # create logger
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
-        # create envs
+
         self.train_env = mw.make()
         self.eval_env = mw.make()
-        # create replay buffer
-        data_specs = (self.train_env.observation_spec(),
-                      self.train_env.action_spec(),
-                      specs.Array((1,), np.float32, 'reward'),
-                      specs.Array((1,), np.float32, 'discount'))
 
-        self.replay_storage = ReplayBufferStorage(data_specs,
-                                                  self.work_dir / 'buffer')
-        
+        data_specs = (
+            self.train_env.observation_spec(),
+            self.train_env.action_spec(),
+            specs.Array((1,), np.float32, 'reward'),
+            specs.Array((1,), np.float32, 'discount'),
+        )
+
+        self.replay_storage = ReplayBufferStorage(
+            data_specs, self.work_dir / 'buffer'
+        )
+
         self.replay_loader = make_replay_loader(
-            self.work_dir / 'buffer', self.cfg.replay_buffer_size,
-            self.cfg.batch_size, self.cfg.replay_buffer_num_workers,
-            self.cfg.save_snapshot, self.cfg.nstep, self.cfg.discount)
+            self.work_dir / 'buffer',
+            self.cfg.replay_buffer_size,
+            self.cfg.batch_size,
+            self.cfg.replay_buffer_num_workers,
+            self.cfg.save_snapshot,
+            self.cfg.nstep,
+            self.cfg.discount,
+        )
         self._replay_iter = None
 
-        self.demo_storage = ReplayBufferStorage(data_specs,
-                                                self.work_dir / 'demos')
-        
-        self.demo_loader = make_replay_loader(
-            self.work_dir / 'demos', self.cfg.replay_buffer_size,
-            self.cfg.batch_size, self.cfg.replay_buffer_num_workers,
-            self.cfg.save_snapshot, self.cfg.nstep, self.cfg.discount)
+        self.demo_storage = ReplayBufferStorage(
+            data_specs, self.work_dir / 'demos'
+        )
 
+        self.demo_loader = make_replay_loader(
+            self.work_dir / 'demos',
+            self.cfg.replay_buffer_size,
+            self.cfg.batch_size,
+            self.cfg.replay_buffer_num_workers,
+            self.cfg.save_snapshot,
+            self.cfg.nstep,
+            self.cfg.discount,
+        )
         self._demo_iter = None
-        
+
         from distutils.dir_util import copy_tree
-        copy_tree(str(Path.cwd().parent.parent / "demos/"), str(self.work_dir / 'demos'))
-        copy_tree(str(Path.cwd().parent.parent / "demos/"), str(self.work_dir / 'buffer'))
+        copy_tree(
+            str(Path.cwd().parent.parent / "demos/"),
+            str(self.work_dir / 'demos')
+        )
+        copy_tree(
+            str(Path.cwd().parent.parent / "demos/"),
+            str(self.work_dir / 'buffer')
+        )
 
         self.video_recorder = VideoRecorder(
-            self.work_dir if self.cfg.save_video else None)
+            self.work_dir if self.cfg.save_video else None
+        )
 
     @property
     def global_step(self):
@@ -107,25 +127,32 @@ class Workspace:
             self._demo_iter = iter(self.demo_loader)
         return self._demo_iter
 
-
     def eval(self, num_eval_episodes=100):
         step, episode, total_reward, total_success = 0, 0, 0, 0
-        eval_until_episode = utils.Until(num_eval_episodes or self.cfg.num_eval_episodes)
+        eval_until_episode = utils.Until(
+            num_eval_episodes or self.cfg.num_eval_episodes
+        )
 
         while eval_until_episode(episode):
             time_step = self.eval_env.reset()
             self.video_recorder.init(self.eval_env, enabled=(episode == 0))
+
             while not time_step.last():
                 with torch.no_grad(), utils.eval_mode(self.agent):
-                    action = self.agent.act(time_step.observation,
-                                            eval_mode=True)
+                    action = self.agent.act(
+                        time_step.observation,
+                        eval_mode=True
+                    )
                 time_step = self.eval_env.step(action)
                 self.video_recorder.record(self.eval_env)
+
                 total_reward += time_step.reward
                 step += 1
-                
-            total_success += time_step.reward > 0.0
+
+            total_success += float(time_step.reward > 0.0)
             episode += 1
+
+        self.video_recorder.save(f'{self.global_frame}.mp4')
 
         with self.logger.log_and_dump_ctx(self.global_frame, ty='eval') as log:
             log('episode_reward', total_reward / episode)
@@ -136,31 +163,32 @@ class Workspace:
             log('eval_total_time', self.timer.total_time())
 
     def train(self):
-        # predicates
-        
-        train_until_step = utils.Until(self.cfg.num_train_frames,
-                                       self.cfg.action_repeat)
-        eval_every_step = utils.Every(self.cfg.eval_every_frames,
-                                      self.cfg.action_repeat)
+        train_until_step = utils.Until(
+            self.cfg.num_train_frames,
+            self.cfg.action_repeat
+        )
+        eval_every_step = utils.Every(
+            self.cfg.eval_every_frames,
+            self.cfg.action_repeat
+        )
 
-
-        # pretrain with BC
+        # Pretrain with BC
         for pretrain_step in range(2000):
             metrics = self.agent.bc(self.demo_iter)
             self.logger.log_metrics(metrics, pretrain_step, ty='pretrain')
-        
-        episode_step, episode_reward = 0, 0
+
+        episode_step, episode_reward = 0, 0.0
         time_step = self.train_env.reset()
         self.replay_storage.add(time_step)
-        metrics = None
+
         while train_until_step(self.global_step):
             if time_step.last():
                 self._global_episode += 1
-                # log stats
+
                 elapsed_time, total_time = self.timer.reset()
                 episode_frame = episode_step * self.cfg.action_repeat
-                with self.logger.log_and_dump_ctx(self.global_frame,
-                                                    ty='train') as log:
+
+                with self.logger.log_and_dump_ctx(self.global_frame, ty='train') as log:
                     log('fps', episode_frame / elapsed_time)
                     log('total_time', total_time)
                     log('episode_reward', episode_reward)
@@ -169,42 +197,40 @@ class Workspace:
                     log('buffer_size', len(self.replay_storage))
                     log('step', self.global_step)
 
-                # reset env
                 time_step = self.train_env.reset()
                 self.replay_storage.add(time_step)
-                # try to save snapshot
+
                 if self.cfg.save_snapshot:
                     self.save_snapshot()
-                episode_step = 0
-                episode_reward = 0
 
-            # try to evaluate
+                episode_step = 0
+                episode_reward = 0.0
+
             if eval_every_step(self.global_step):
                 self.eval()
 
-            # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):
-                action = self.agent.act(time_step.observation,
-                                        eval_mode=self.global_frame <= self.cfg.warmup)
+                action = self.agent.act(
+                    time_step.observation,
+                    eval_mode=(self.global_frame <= self.cfg.warmup)
+                )
 
-            # try to update the agent
             for _ in range(self.cfg.utd):
                 critic_metrics = self.agent.update_critic(self.replay_iter)
-
             self.logger.log_metrics(critic_metrics, self.global_frame, ty='critic')
 
             if self.global_frame > self.cfg.warmup:
                 actor_metrics = self.agent.update_actor(self.replay_iter)
+                self.logger.log_metrics(actor_metrics, self.global_frame, ty='actor')
 
                 if self.global_step % self.cfg.bc_freq == 0:
                     bc_metrics = self.agent.bc(self.demo_iter)
-                    
-                self.logger.log_metrics(actor_metrics, self.global_frame, ty='actor')
-            
-            # take env step
+                    self.logger.log_metrics(bc_metrics, self.global_frame, ty='bc')
+
             time_step = self.train_env.step(action)
-            episode_reward += time_step.reward
+            episode_reward += float(time_step.reward)
             self.replay_storage.add(time_step)
+
             episode_step += 1
             self._global_step += 1
 
@@ -225,13 +251,14 @@ class Workspace:
 
 @hydra.main(config_path='cfgs', config_name='config')
 def main(cfg):
-    from train import Workspace as W
     root_dir = Path.cwd()
-    workspace = W(cfg)
+    workspace = Workspace(cfg)
+
     snapshot = root_dir / 'snapshot.pt'
     if snapshot.exists():
         print(f'resuming: {snapshot}')
         workspace.load_snapshot()
+
     workspace.train()
 
 
