@@ -95,7 +95,12 @@ class MetaWorldEnv:
             if done:
                 break
 
-        reward = 1.0 * info.get("success", 0.0)
+        #reward = 1.0 * info.get("success", 0.0)
+        # Debug: print raw env info occasionally
+        if self._step is not None and self._step < 100:
+            print("debug info:", info)
+
+        reward = np.float32(1.0 * info.get("success", 0.0))
         self._step += 1
         if self._step >= self.duration:
             done = True
