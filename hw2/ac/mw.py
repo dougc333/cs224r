@@ -39,7 +39,7 @@ class MetaWorldEnv:
             self._env._set_task_called = True
 
         self.hand_init_pose = self._env.hand_init_pos.copy()
-        self.hand_init_pose = np.array([0.1, 0.5, 0.30])
+        self.hand_init_pose = np.array([0.1, 0.5, 0.30], dtype=np.float32)
 
         self.action_repeat = action_repeat
         self.duration = duration
@@ -120,7 +120,7 @@ class MetaWorldEnv:
 
         self._step = 0
         return state
-        
+
     def render(self, mode="rgb_array", width=84, height=84):
         img = None
 
@@ -163,7 +163,7 @@ class GymWrapper:
     def observation_spec(self):
         return dm_env.specs.Array(
             shape=self._env.observation_space.shape,
-            dtype=self._env.observation_space.dtype,
+            dtype=np.float32,
             name="observation",
         )
 
