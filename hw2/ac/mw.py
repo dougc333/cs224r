@@ -1,5 +1,6 @@
 from typing import Any, NamedTuple
 import numpy as np
+import dm_env
 from dm_env import StepType, specs
 import cv2
 from metaworld import ALL_V3_ENVIRONMENTS
