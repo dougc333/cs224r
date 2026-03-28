@@ -79,7 +79,7 @@ class ACAgent:
         self.critic.train(training)
 
     def act(self, obs, eval_mode):
-        obs = torch.as_tensor(obs, device=self.device)
+        obs = torch.as_tensor(obs, device=self.device, dtype=torch.float32)
         dist = self.actor(obs.unsqueeze(0))
         if eval_mode:
             action = dist.mean
