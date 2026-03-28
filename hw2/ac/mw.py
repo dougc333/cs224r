@@ -81,7 +81,7 @@ class MetaWorldEnv:
             return obs, reward, done, info
 
         raise ValueError(f"Unexpected step output format: {type(out)} / {out}")
-
+    
     def step(self, action):
         reward = 0.0
         done = False
@@ -90,21 +90,21 @@ class MetaWorldEnv:
         for _ in range(self.action_repeat):
             out = self._env.step(action)
             state, rew, done, info = self._unwrap_step(out)
-            state = state.astype(self._env.observation_space.dtype)
-            reward += rew
+            state = np.asarray(state, dtype=np.float32)
+            reward += float(rew)
             if done:
                 break
 
-        #reward = 1.0 * info.get("success", 0.0)
-        # Debug: print raw env info occasionally
-        if self._step is not None and self._step < 100:
+        if self._step is not None and self._step < 5:
             print("debug info:", info)
-        #reward = np.float32(1.0 * info.get("success", 0.0))
+
         self._step += 1
         if self._step >= self.duration:
             done = True
 
-        return state, reward, done, info
+        return state, np.float32(reward), done, info
+
+    
 
     def reset(self):
         self._env.hand_init_pos = self.hand_init_pose + 0.03 * np.random.normal(size=3)
@@ -114,17 +114,16 @@ class MetaWorldEnv:
         for _ in range(10):
             step_out = self._env.step(np.zeros(self.action_space.shape, dtype=self.action_space.dtype))
             state, _, done, _ = self._unwrap_step(step_out)
-            state = state.astype(self._env.observation_space.dtype)
+            state = np.asarray(state, dtype=np.float32)
             if done:
                 break
 
         self._step = 0
         return state
-
+        
     def render(self, mode="rgb_array", width=84, height=84):
         img = None
 
-        # Preferred Gymnasium/Meta-World v3 render path
         try:
             img = self._env.render()
         except TypeError:
@@ -145,6 +144,7 @@ class MetaWorldEnv:
             img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
 
         return img
+
 
 
 class GymWrapper:
