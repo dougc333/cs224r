@@ -110,7 +110,7 @@ class MetaWorldEnv:
         self._step = 0
         return state
 
-    def render(self, mode="rgb_array", width=84, height=84):
+    def render(self, mode="rgb_array", width=512, height=512):
         img = None
 
         try:
