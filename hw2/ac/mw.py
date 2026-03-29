@@ -7,7 +7,7 @@ from metaworld import ALL_V3_ENVIRONMENTS
 
 
 class MetaWorldEnv:
-    def __init__(self, name="hammer-v3", action_repeat=2, duration=50):
+    def __init__(self, name="hammer-v3", action_repeat=2, duration=500):
         render_params = {
             "elevation": -22.5,
             "azimuth": 15,

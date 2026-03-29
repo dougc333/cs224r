@@ -141,7 +141,7 @@ class Workspace:
             time_step = self.eval_env.reset()
 
             # record only the first eval episode
-            record_this_episode = (episode == 0)
+            record_this_episode = (episode <5 )
             if record_this_episode:
                 self.video_recorder.record(self.eval_env)
 
