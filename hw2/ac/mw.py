@@ -93,22 +93,36 @@ class MetaWorldEnv:
         self.last_success = float(info.get("success", 0.0))
         return state, np.float32(reward), done, info
 
-    
-
     def reset(self):
-        self._env.hand_init_pos = self.hand_init_pose + 0.03 * np.random.normal(size=3)
         out = self._env.reset()
         _, _ = self._unwrap_reset(out)
-
+    
         for _ in range(10):
-            step_out = self._env.step(np.zeros(self.action_space.shape, dtype=self.action_space.dtype))
+            step_out = self._env.step(
+                np.zeros(self.action_space.shape, dtype=self.action_space.dtype)
+            )
             state, _, done, _ = self._unwrap_step(step_out)
             state = np.asarray(state, dtype=np.float32)
             if done:
                 break
-
+            
         self._step = 0
         return state
+
+    # def reset(self):
+    #     self._env.hand_init_pos = self.hand_init_pose + 0.03 * np.random.normal(size=3)
+    #     out = self._env.reset()
+    #     _, _ = self._unwrap_reset(out)
+
+    #     for _ in range(10):
+    #         step_out = self._env.step(np.zeros(self.action_space.shape, dtype=self.action_space.dtype))
+    #         state, _, done, _ = self._unwrap_step(step_out)
+    #         state = np.asarray(state, dtype=np.float32)
+    #         if done:
+    #             break
+
+    #     self._step = 0
+    #     return state
 
     def render(self, mode="rgb_array", width=512, height=512):
         img = None
