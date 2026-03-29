@@ -128,14 +128,22 @@ class Workspace:
         return self._demo_iter
 
     def eval(self, num_eval_episodes=100):
-        step, episode, total_reward, total_success = 0, 0, 0, 0
+        step, episode = 0, 0
+        total_reward, total_success = 0.0, 0.0
         eval_until_episode = utils.Until(
             num_eval_episodes or self.cfg.num_eval_episodes
         )
 
+        # init ONCE, keep enabled for the saved episode
+        self.video_recorder.init(self.eval_env, enabled=True)
+
         while eval_until_episode(episode):
             time_step = self.eval_env.reset()
-            self.video_recorder.init(self.eval_env, enabled=(episode == 0))
+
+            # record only the first eval episode
+            record_this_episode = (episode == 0)
+            if record_this_episode:
+                self.video_recorder.record(self.eval_env)
 
             while not time_step.last():
                 with torch.no_grad(), utils.eval_mode(self.agent):
@@ -144,12 +152,14 @@ class Workspace:
                         eval_mode=True
                     )
                 time_step = self.eval_env.step(action)
-                self.video_recorder.record(self.eval_env)
 
-                total_reward += time_step.reward
+                if record_this_episode:
+                    self.video_recorder.record(self.eval_env)
+
+                total_reward += float(time_step.reward)
                 step += 1
 
-            total_success += self.eval_env.last_success
+            total_success += float(self.eval_env.last_success)
             episode += 1
 
         self.video_recorder.save(f'{self.global_frame}.mp4')
@@ -233,9 +243,10 @@ class Workspace:
 
             episode_step += 1
             self._global_step += 1
+
         # Final evaluation + video save
         self.eval()
-           
+
     def save_snapshot(self):
         snapshot = self.work_dir / 'snapshot.pt'
         keys_to_save = ['agent', 'timer', '_global_step', '_global_episode']
