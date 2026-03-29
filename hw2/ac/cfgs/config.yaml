@@ -13,8 +13,8 @@ bc_freq: 2
 num_train_frames: 100000
 
 # eval
-eval_every_frames: 2000
-num_eval_episodes: 50
+eval_every_frames: 10000
+num_eval_episodes: 20
 
 # snapshot
 save_snapshot: false
