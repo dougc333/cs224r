@@ -233,7 +233,9 @@ class Workspace:
 
             episode_step += 1
             self._global_step += 1
-
+        # Final evaluation + video save
+        self.eval()
+           
     def save_snapshot(self):
         snapshot = self.work_dir / 'snapshot.pt'
         keys_to_save = ['agent', 'timer', '_global_step', '_global_episode']
