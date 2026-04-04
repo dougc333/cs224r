@@ -153,21 +153,21 @@ class ACAgent:
 
     def bc(self, replay_iter):
         metrics = dict()
-    
+
         batch = next(replay_iter)
         obs, action, _, _, _ = utils.to_torch(batch, self.device)
-    
+
         obs = obs.float()
         action = action.float()
-    
+
         dist = self.actor(obs)
         log_prob = dist.log_prob(action).sum(-1)
         actor_loss = -log_prob.mean()
-    
+
         self.actor_opt.zero_grad(set_to_none=True)
         actor_loss.backward()
         self.actor_opt.step()
-    
+
         metrics['actor_loss'] = actor_loss.item()
         metrics['bc_log_prob'] = log_prob.mean().item()
         return metrics

@@ -137,10 +137,8 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         # TODO: update the policy and return the loss. Recall that to update the policy
         # you need to backpropagate the gradient and step the optimizer.
          # Convert numpy -> torch if needed
-        if isinstance(observations, np.ndarray):
-            observations = ptu.from_numpy(observations)
-        if isinstance(actions, np.ndarray):
-            actions = ptu.from_numpy(actions)
+        observations = ptu.from_numpy(observations)
+        actions = ptu.from_numpy(actions)
 
         pred_actions = self.mean_net(observations) # [batch_size, ac_dim]
         loss = F.mse_loss(pred_actions, actions)
