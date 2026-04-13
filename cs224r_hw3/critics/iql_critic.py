@@ -46,8 +46,9 @@ class IQLCritic(BaseCritic):
         # HINT: see Q_net definition above and optimizer below
         # HINT: Define using same hparams as Q_net, but adjust output dimensions
         ### YOUR CODE START HERE ###
-        self.v_net = None
+        self.v_net = network_initializer(self.ob_dim, 1)
         ### YOUR CODE END HERE ###
+        self.v_net.to(ptu.device)
 
         self.v_optimizer = self.optimizer_spec.constructor(
             self.v_net.parameters(),
@@ -65,9 +66,13 @@ class IQLCritic(BaseCritic):
         # HINT: self.iql_expectile provides the \zeta value as described 
         # in the problem statement.
         ### YOUR CODE START HERE ###
-        #pass
-        weight = torch.where(diff > 0, ptu.from_numpy(np.array(self.iql_expectile)), ptu.from_numpy(np.array(1 -  self.iql_expectile)))
-        return weight * (diff**2)
+        tau = float(self.iql_expectile)
+        weight = torch.where(
+            diff > 0,
+            torch.full_like(diff, tau),
+            torch.full_like(diff, 1.0 - tau),
+        )
+        return weight * (diff ** 2)
         ### YOUR CODE END HERE ###
 
 
@@ -83,7 +88,11 @@ class IQLCritic(BaseCritic):
         # HINT: Use self.expectile_loss as defined above, 
         # passing in the difference between the computed targets and predictions
         ### YOUR CODE START HERE ###
-        value_loss = None
+        qa_values = self.q_net_target(ob_no)
+        q_values = torch.gather(qa_values, 1, ac_na.unsqueeze(1)).squeeze(1)
+        v_values = self.v_net(ob_no).squeeze(1)
+        diff = q_values.detach() - v_values
+        value_loss = self.expectile_loss(diff).mean()
         ### YOUR CODE END HERE ###
         
 
@@ -113,7 +122,14 @@ class IQLCritic(BaseCritic):
         # HINT: Note that if the next state is terminal, 
         # its target reward value needs to be adjusted.
         ### YOUR CODE START HERE ###
-        loss = None
+        qa_values = self.q_net(ob_no)
+        q_values = torch.gather(qa_values, 1, ac_na.unsqueeze(1)).squeeze(1)
+
+        with torch.no_grad():
+            next_v = self.v_net(next_ob_no).squeeze(1)
+            target = reward_n + self.gamma * next_v * (1 - terminal_n)
+
+        loss = self.mse_loss(q_values, target)
         ### YOUR CODE END HERE ###
         self.optimizer.zero_grad()
         loss.backward()

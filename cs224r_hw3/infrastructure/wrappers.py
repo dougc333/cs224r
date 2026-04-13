@@ -1,6 +1,48 @@
 import numpy as np
 import gym
 from gym import spaces
+from collections import deque
+
+
+class EpisodeStatisticsWrapper(gym.Wrapper):
+    """
+    Lightweight replacement for Gym's RecordEpisodeStatistics wrapper that works
+    with both the old and new step APIs.
+    """
+
+    def __init__(self, env, deque_size=1000):
+        super().__init__(env)
+        self.return_queue = deque(maxlen=deque_size)
+        self.length_queue = deque(maxlen=deque_size)
+        self._ep_return = 0.0
+        self._ep_length = 0
+
+    def reset(self, **kwargs):
+        self._ep_return = 0.0
+        self._ep_length = 0
+        return self.env.reset(**kwargs)
+
+    def get_episode_rewards(self):
+        return list(self.return_queue)
+
+    def step(self, action):
+        out = self.env.step(action)
+        if len(out) == 5:
+            obs, reward, terminated, truncated, info = out
+            done = bool(terminated or truncated)
+        else:
+            obs, reward, done, info = out
+
+        self._ep_return += float(reward)
+        self._ep_length += 1
+
+        if done:
+            self.return_queue.append(self._ep_return)
+            self.length_queue.append(self._ep_length)
+            self._ep_return = 0.0
+            self._ep_length = 0
+
+        return out
 
 class ReturnWrapper(gym.Wrapper):
     def get_episode_rewards(self):

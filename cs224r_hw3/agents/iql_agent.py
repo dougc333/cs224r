@@ -39,7 +39,7 @@ class IQLAgent(DQNAgent):
             self.agent_params['size'],
             self.agent_params['discrete'],
             self.agent_params['learning_rate'],
-            self.agent_params['awac_lambda'],
+            lambda_awac=self.agent_params['awac_lambda'],
         )
 
         self.exploit_rew_shift = agent_params['exploit_rew_shift']
@@ -71,7 +71,10 @@ class IQLAgent(DQNAgent):
         # HINT: Access critic using self.exploitation_critic 
         # (critic trained in the offline setting)
         ### YOUR CODE START HERE ###
-        pass
+        q_sa = self.get_qvals(self.exploitation_critic, ob_no, action=ac_na, use_v=False).squeeze(1)
+        v_s = self.get_qvals(self.exploitation_critic, ob_no, use_v=True).squeeze(1)
+        advantage = (q_sa - v_s).detach()
+        return advantage
         ### YOUR CODE END HERE ###
         
     def train(self, ob_no, ac_na, re_n, next_ob_no, terminal_n):
@@ -114,8 +117,10 @@ class IQLAgent(DQNAgent):
             # TODO 2): Calculate the awac actor loss
             
             ### YOUR CODE START HERE ###
-            advantage = None
-            actor_loss = None
+            advantage = self.estimate_advantage(ob_no, ac_na, env_reward, next_ob_no, terminal_n)
+            obs_t = ptu.from_numpy(ob_no)
+            ac_t = torch.from_numpy(ac_na).to(ptu.device).long()
+            actor_loss = self.awac_actor.update(obs_t, ac_t, adv_n=advantage)
             ### YOUR CODE END HERE ###
             
             

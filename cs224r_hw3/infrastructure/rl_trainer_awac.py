@@ -10,7 +10,7 @@ from gym import wrappers
 import numpy as np
 import torch
 from cs224r.infrastructure import pytorch_util as ptu
-from cs224r.infrastructure.wrappers import ReturnWrapper
+from cs224r.infrastructure.wrappers import EpisodeStatisticsWrapper
 
 from cs224r.infrastructure import utils
 from cs224r.infrastructure.logger import Logger
@@ -56,8 +56,10 @@ class RL_Trainer(object):
 
         # Make the gym environment
         register_custom_envs()
-        self.env = gym.make(self.params['env_name'])
-        self.eval_env = gym.make(self.params['env_name'])
+        # Newer Gym versions wrap envs with an environment checker that relies on
+        # deprecated NumPy aliases (e.g. `np.bool8`). Disable it for compatibility.
+        self.env = gym.make(self.params['env_name'], disable_env_checker=True)
+        self.eval_env = gym.make(self.params['env_name'], disable_env_checker=True)
         if not ('pointmass' in self.params['env_name']):
             import matplotlib
             matplotlib.use('Agg')
@@ -69,27 +71,48 @@ class RL_Trainer(object):
         else:
             self.episode_trigger = lambda episode: False
             
-        if 'env_wrappers' in self.params:
-            # These operations are currently only for Atari envs
-            self.env = wrappers.RecordEpisodeStatistics(self.env, deque_size=1000)
-            self.env = ReturnWrapper(self.env)
-            self.env = wrappers.RecordVideo(self.env, os.path.join(self.params['logdir'], "gym"), episode_trigger=self.episode_trigger)
+        # Track episode returns for DQN-style logging (works for both old/new
+        # step APIs).
+        self.env = EpisodeStatisticsWrapper(self.env, deque_size=1000)
+        self.eval_env = EpisodeStatisticsWrapper(self.eval_env, deque_size=1000)
+
+        apply_gym_wrappers = (
+            'env_wrappers' in self.params
+            # Video/Atari wrappers are only intended for Atari envs. Gym's
+            # RecordVideo wrapper assumes the new step API.
+            and self.params['env_name'] in ['MsPacman-v0', 'PongNoFrameskip-v4']
+        )
+
+        if apply_gym_wrappers:
+            self.env = wrappers.RecordVideo(
+                self.env,
+                os.path.join(self.params['logdir'], "gym"),
+                episode_trigger=self.episode_trigger,
+            )
             self.env = params['env_wrappers'](self.env)
 
-            self.eval_env = wrappers.RecordEpisodeStatistics(self.eval_env, deque_size=1000)
-            self.eval_env = ReturnWrapper(self.eval_env)
-            self.eval_env = wrappers.RecordVideo(self.eval_env, os.path.join(self.params['logdir'], "gym"), episode_trigger=self.episode_trigger)
+            self.eval_env = wrappers.RecordVideo(
+                self.eval_env,
+                os.path.join(self.params['logdir'], "gym"),
+                episode_trigger=self.episode_trigger,
+            )
             self.eval_env = params['env_wrappers'](self.eval_env)
 
-            self.mean_episode_reward = -float('nan')
-            self.best_mean_episode_reward = -float('inf')
+        self.mean_episode_reward = -float('nan')
+        self.best_mean_episode_reward = -float('inf')
         if 'non_atari_colab_env' in self.params and self.params['video_log_freq'] > 0:
             self.env = wrappers.RecordVideo(self.env, os.path.join(self.params['logdir'], "gym"), episode_trigger=self.episode_trigger)
             self.eval_env = wrappers.RecordVideo(self.eval_env, os.path.join(self.params['logdir'], "gym"), episode_trigger=self.episode_trigger)
             self.mean_episode_reward = -float('nan')
             self.best_mean_episode_reward = -float('inf')
-        self.env.seed(seed)
-        self.eval_env.seed(seed)
+        if hasattr(self.env, "seed"):
+            self.env.seed(seed)
+        else:
+            self.env.reset(seed=seed)
+        if hasattr(self.eval_env, "seed"):
+            self.eval_env.seed(seed)
+        else:
+            self.eval_env.reset(seed=seed)
 
         # Maximum length for episodes
         self.params['ep_len'] = self.params['ep_len'] or self.env.spec.max_episode_steps

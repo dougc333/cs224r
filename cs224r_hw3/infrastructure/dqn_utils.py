@@ -28,32 +28,33 @@ OptimizerSpec = namedtuple(
 
 def register_custom_envs():
     from gym.envs.registration import registry
-    if 'LunarLander-v3' not in registry.env_specs:
+    env_specs = registry.env_specs if hasattr(registry, "env_specs") else registry
+    if 'LunarLander-v3' not in env_specs:
         register(
             id='LunarLander-v3',
             entry_point='cs224r.envs.box2d.lunar_lander:LunarLander',
             max_episode_steps=1000,
             reward_threshold=200,
         )
-    if 'PointmassEasy-v0' not in registry.env_specs:
+    if 'PointmassEasy-v0' not in env_specs:
         register(
             id='PointmassEasy-v0',
             entry_point='cs224r.envs.pointmass.pointmass:Pointmass',
             kwargs={'difficulty': 0}
         )
-    if 'PointmassMedium-v0' not in registry.env_specs:
+    if 'PointmassMedium-v0' not in env_specs:
         register(
             id='PointmassMedium-v0',
             entry_point='cs224r.envs.pointmass.pointmass:Pointmass',
             kwargs={'difficulty': 1}
         )
-    if 'PointmassHard-v0' not in registry.env_specs:
+    if 'PointmassHard-v0' not in env_specs:
         register(
             id='PointmassHard-v0',
             entry_point='cs224r.envs.pointmass.pointmass:Pointmass',
             kwargs={'difficulty': 2}
         )
-    if 'PointmassVeryHard-v0' not in registry.env_specs:
+    if 'PointmassVeryHard-v0' not in env_specs:
         register(
             id='PointmassVeryHard-v0',
             entry_point='cs224r.envs.pointmass.pointmass:Pointmass',
