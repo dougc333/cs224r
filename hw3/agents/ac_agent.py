@@ -1,10 +1,10 @@
 from collections import OrderedDict
 
-from cs224r.critics.bootstrapped_continuous_critic import \
+from critics.bootstrapped_continuous_critic import \
     BootstrappedContinuousCritic
-from cs224r.infrastructure.replay_buffer import ReplayBuffer
-from cs224r.infrastructure.utils import *
-from cs224r.policies.MLP_policy import MLPPolicyAC
+from infrastructure.replay_buffer import ReplayBuffer
+from infrastructure.utils import *
+from policies.MLP_policy import MLPPolicyAC
 from .base_agent import BaseAgent
 
 

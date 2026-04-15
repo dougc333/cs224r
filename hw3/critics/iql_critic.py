@@ -6,7 +6,7 @@ from torch import nn
 import pdb
 import numpy as np
 
-from cs224r.infrastructure import pytorch_util as ptu
+from infrastructure import pytorch_util as ptu
 
 class IQLCritic(BaseCritic):
 

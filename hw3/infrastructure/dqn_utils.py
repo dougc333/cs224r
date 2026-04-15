@@ -9,7 +9,7 @@ import numpy as np
 from torch import nn
 import torch.optim as optim
 
-from cs224r.infrastructure.wrappers import wrap_deepmind
+from infrastructure.wrappers import wrap_deepmind
 from gym.envs.registration import register
 
 import torch

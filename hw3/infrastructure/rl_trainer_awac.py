@@ -9,14 +9,14 @@ import gym
 from gym import wrappers
 import numpy as np
 import torch
-from cs224r.infrastructure import pytorch_util as ptu
-from cs224r.infrastructure.wrappers import EpisodeStatisticsWrapper
+from infrastructure import pytorch_util as ptu
+from infrastructure.wrappers import EpisodeStatisticsWrapper
 
-from cs224r.infrastructure import utils
-from cs224r.infrastructure.logger import Logger
+from infrastructure import utils
+from infrastructure.logger import Logger
 
-from cs224r.agents.iql_agent import IQLAgent
-from cs224r.infrastructure.dqn_utils import (
+from agents.iql_agent import IQLAgent
+from infrastructure.dqn_utils import (
         get_wrapper_by_name,
         register_custom_envs,
 )

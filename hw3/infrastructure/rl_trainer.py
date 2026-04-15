@@ -9,20 +9,20 @@ import gym
 from gym import wrappers
 import numpy as np
 import torch
-from cs224r.infrastructure import pytorch_util as ptu
-from cs224r.infrastructure.wrappers import ReturnWrapper
+from infrastructure import pytorch_util as ptu
+from infrastructure.wrappers import ReturnWrapper
 
-from cs224r.infrastructure import utils
-from cs224r.infrastructure.logger import Logger
+from infrastructure import utils
+from infrastructure.logger import Logger
 
-from cs224r.agents.explore_or_exploit_agent import ExplorationOrExploitationAgent
-from cs224r.infrastructure.dqn_utils import (
+from agents.explore_or_exploit_agent import ExplorationOrExploitationAgent
+from infrastructure.dqn_utils import (
         get_wrapper_by_name,
         register_custom_envs,
 )
 
 #register all of our envs
-import cs224r.envs
+import envs
 
 # how many rollouts to save as videos to tensorboard
 MAX_NVIDEO = 2

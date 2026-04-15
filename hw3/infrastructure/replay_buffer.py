@@ -1,4 +1,4 @@
-from cs224r.infrastructure.utils import *
+from infrastructure.utils import *
 
 
 class ReplayBuffer(object):

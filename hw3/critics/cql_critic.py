@@ -5,7 +5,7 @@ from torch.nn import utils
 from torch import nn
 import pdb
 
-from cs224r.infrastructure import pytorch_util as ptu
+from infrastructure import pytorch_util as ptu
 
 
 class CQLCritic(BaseCritic):

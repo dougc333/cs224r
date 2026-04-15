@@ -1,9 +1,9 @@
 import numpy as np
 import pdb
 
-from cs224r.infrastructure.dqn_utils import MemoryOptimizedReplayBuffer, PiecewiseSchedule
-from cs224r.policies.argmax_policy import ArgMaxPolicy
-from cs224r.critics.dqn_critic import DQNCritic
+from infrastructure.dqn_utils import MemoryOptimizedReplayBuffer, PiecewiseSchedule
+from policies.argmax_policy import ArgMaxPolicy
+from critics.dqn_critic import DQNCritic
 
 
 class DQNAgent(object):

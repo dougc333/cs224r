@@ -1,4 +1,4 @@
-from cs224r.infrastructure import pytorch_util as ptu
+from infrastructure import pytorch_util as ptu
 from .base_exploration_model import BaseExplorationModel
 import torch.optim as optim
 from torch import nn

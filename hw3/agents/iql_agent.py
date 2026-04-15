@@ -1,16 +1,16 @@
 from collections import OrderedDict
 
-from cs224r.critics.dqn_critic import DQNCritic
-from cs224r.critics.cql_critic import CQLCritic
-from cs224r.critics.iql_critic import IQLCritic
-from cs224r.infrastructure.replay_buffer import ReplayBuffer
-from cs224r.infrastructure.utils import *
-from cs224r.infrastructure import pytorch_util as ptu
-from cs224r.policies.argmax_policy import ArgMaxPolicy
-from cs224r.infrastructure.dqn_utils import MemoryOptimizedReplayBuffer
-from cs224r.exploration.rnd_model import RNDModel
+from critics.dqn_critic import DQNCritic
+from critics.cql_critic import CQLCritic
+from critics.iql_critic import IQLCritic
+from infrastructure.replay_buffer import ReplayBuffer
+from infrastructure.utils import *
+from infrastructure import pytorch_util as ptu
+from policies.argmax_policy import ArgMaxPolicy
+from infrastructure.dqn_utils import MemoryOptimizedReplayBuffer
+from exploration.rnd_model import RNDModel
 from .dqn_agent import DQNAgent
-from cs224r.policies.MLP_policy import MLPPolicyAWAC
+from policies.MLP_policy import MLPPolicyAWAC
 import numpy as np
 import torch
 

@@ -3,7 +3,7 @@ from torch import nn
 from torch import optim
 import pdb
 
-from cs224r.infrastructure import pytorch_util as ptu
+from infrastructure import pytorch_util as ptu
 
 
 class BootstrappedContinuousCritic(nn.Module, BaseCritic):
