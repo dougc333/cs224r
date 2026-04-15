@@ -22,7 +22,7 @@ from infrastructure.dqn_utils import (
 )
 
 #register all of our envs
-import cs224r.envs
+import envs
 
 # how many rollouts to save as videos to tensorboard
 MAX_NVIDEO = 2
