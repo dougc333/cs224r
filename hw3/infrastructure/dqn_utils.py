@@ -32,20 +32,20 @@ def register_custom_envs():
     if 'LunarLander-v3' not in env_specs:
         register(
             id='LunarLander-v3',
-            entry_point='cs224r.envs.box2d.lunar_lander:LunarLander',
+            entry_point='envs.box2d.lunar_lander:LunarLander',
             max_episode_steps=1000,
             reward_threshold=200,
         )
     if 'PointmassEasy-v0' not in env_specs:
         register(
             id='PointmassEasy-v0',
-            entry_point='cs224r.envs.pointmass.pointmass:Pointmass',
+            entry_point='envs.pointmass.pointmass:Pointmass',
             kwargs={'difficulty': 0}
         )
     if 'PointmassMedium-v0' not in env_specs:
         register(
             id='PointmassMedium-v0',
-            entry_point='cs224r.envs.pointmass.pointmass:Pointmass',
+            entry_point='envs.pointmass.pointmass:Pointmass',
             kwargs={'difficulty': 1}
         )
     if 'PointmassHard-v0' not in env_specs:
