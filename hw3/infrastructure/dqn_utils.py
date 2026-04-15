@@ -51,13 +51,13 @@ def register_custom_envs():
     if 'PointmassHard-v0' not in env_specs:
         register(
             id='PointmassHard-v0',
-            entry_point='cs224r.envs.pointmass.pointmass:Pointmass',
+            entry_point='envs.pointmass.pointmass:Pointmass',
             kwargs={'difficulty': 2}
         )
     if 'PointmassVeryHard-v0' not in env_specs:
         register(
             id='PointmassVeryHard-v0',
-            entry_point='cs224r.envs.pointmass.pointmass:Pointmass',
+            entry_point='envs.pointmass.pointmass:Pointmass',
             kwargs={'difficulty': 3}
         )
 
