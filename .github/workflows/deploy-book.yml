@@ -38,8 +38,9 @@ jobs:
 
       - name: Build Jupyter Book
         run: |
-          python -m jupyter_book --version
-          python -m jupyter_book build book/
+          JUPYTER_BOOK="$(python -c 'import os,sysconfig; print(os.path.join(sysconfig.get_path("scripts"), "jupyter-book"))')"
+          "$JUPYTER_BOOK" --version
+          "$JUPYTER_BOOK" build book/
 
       - name: Debug build output
         run: |
