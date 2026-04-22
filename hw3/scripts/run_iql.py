@@ -1,9 +1,9 @@
 import os
 import time
 
-from cs224r.infrastructure.rl_trainer_awac import RL_Trainer
-from cs224r.agents.iql_agent import IQLAgent
-from cs224r.infrastructure.dqn_utils import get_env_kwargs, PiecewiseSchedule, ConstantSchedule
+from infrastructure.rl_trainer_awac import RL_Trainer
+from agents.iql_agent import IQLAgent
+from infrastructure.dqn_utils import get_env_kwargs, PiecewiseSchedule, ConstantSchedule
 
 
 class Q_Trainer(object):

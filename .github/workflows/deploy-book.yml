@@ -19,22 +19,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
+          # The root requirements are for course code, not the book build toolchain.
+          python -m pip install "jupyter-book>=1,<2"
 
       - name: Build Jupyter Book
         run: |
-          jupyter-book --version
-          jupyter-book build book/
+          python -m jupyter_book --version
+          python -m jupyter_book build book/
 
       - name: Debug build output
         run: |
