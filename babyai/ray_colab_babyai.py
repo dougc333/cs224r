@@ -250,7 +250,9 @@ def run(cmd: list[str], force_cpu: bool = True, stream_callback=None) -> str:
     return output
 
 
-TRAIN_BATCH_RE = re.compile(r"batch\s+(\d+), FPS so far")
+TRAIN_BATCH_RE = re.compile(
+    r"batch\s+(\d+)(?:\s+\||,)\s*FPS so far\s+([0-9.]+)(?:\s+\|\s+pL\s+([-0-9.]+)\s+\|\s+A\s+([0-9.]+))?"
+)
 TRAIN_EPOCH_RE = re.compile(r"\bU\s+(\d+)\s+\|")
 VALIDATION_RE = re.compile(r"Validation:\s+A\s+([0-9.]+)\s+\|\s+R\s+([0-9.]+)\s+\|\s+S\s+([0-9.]+)")
 
@@ -360,6 +362,7 @@ def train_level(
     patience: int,
     force_cpu: bool,
     force: bool,
+    record_validation_video: bool,
 ) -> str:
     task_start = time.time()
     STORAGE.joinpath("demos").mkdir(parents=True, exist_ok=True)
@@ -428,6 +431,7 @@ def train_level(
         f"(model={model}, epochs={epochs}, batch_size={batch_size}, "
         f"val_episodes={val_episodes}, cpu_only={force_cpu})"
     )
+    video_dir = STORAGE / "videos" / model if record_validation_video else None
     state = {"epoch": done_epochs, "batch": None}
 
     def stream_train_status(line: str) -> None:
@@ -435,10 +439,13 @@ def train_level(
         if batch_match:
             state["batch"] = int(batch_match.group(1))
             epoch_display = state["epoch"] if state["epoch"] else "starting"
-            print(
-                f"[{level}] epoch {epoch_display}/{epochs} batch {state['batch']}",
-                flush=True,
-            )
+            fps = batch_match.group(2)
+            policy_loss = batch_match.group(3)
+            accuracy = batch_match.group(4)
+            extras = f" fps={fps}"
+            if policy_loss is not None and accuracy is not None:
+                extras += f" pL={policy_loss} acc={accuracy}"
+            print(f"[{level}] epoch {epoch_display}/{epochs} batch {state['batch']}{extras}", flush=True)
             return
 
         epoch_match = TRAIN_EPOCH_RE.search(line)
@@ -461,7 +468,7 @@ def train_level(
                 flush=True,
             )
 
-    out, elapsed = timed("train", lambda: run([
+    train_cmd = [
         sys.executable,
         str(BABYAI_SRC / "scripts" / "train_il.py"),
         "--env",
@@ -488,13 +495,18 @@ def train_level(
         str(patience),
         "--save-interval",
         "0",
-    ], force_cpu=force_cpu, stream_callback=stream_train_status))
+    ]
+    if video_dir is not None:
+        train_cmd.extend(["--validation-video-dir", str(video_dir)])
+    out, elapsed = timed("train", lambda: run(train_cmd, force_cpu=force_cpu, stream_callback=stream_train_status))
     outputs.append(out)
     outputs.append(f"training elapsed: {format_duration(elapsed)}")
     if best_model_checkpoint_exists(model):
         outputs.append(f"best checkpoint: {best_model_path(model)}")
     elif model_checkpoint_exists(model):
         outputs.append(f"latest checkpoint only: {STORAGE / 'models' / model / 'model.pt'}")
+    if video_dir is not None:
+        outputs.append(f"validation videos dir: {video_dir}")
 
     total_elapsed = time.time() - task_start
     outputs.append(f"train {level} total elapsed: {format_duration(total_elapsed)}")
@@ -672,6 +684,7 @@ def run_train_command(args: argparse.Namespace) -> None:
             args.patience,
             not args.use_gpu,
             args.force,
+            args.record_validation_video,
         )
     timings: list[tuple[str, str, float]] = []
     start_times = {level: time.time() for level in levels}
@@ -711,6 +724,7 @@ def run_one_level_command(args: argparse.Namespace) -> None:
             args.patience,
             not args.use_gpu,
             args.force,
+            args.record_validation_video,
         ),
     )
     print(
@@ -755,10 +769,12 @@ def parse_args() -> argparse.Namespace:
     train.add_argument("--num-workers", type=int, default=1)
     train.add_argument("--cpus-per-train", type=int, default=2)
     train.add_argument("--use-gpu", action="store_true")
+    train.add_argument("--record-validation-video", action="store_true")
 
     run_level = subparsers.add_parser("run-level", help="Generate and train exactly one level, then stop.")
     add_common_args(run_level)
     run_level.add_argument("--use-gpu", action="store_true")
+    run_level.add_argument("--record-validation-video", action="store_true")
 
     summary = subparsers.add_parser("summary", help="Print summaries from existing logs.")
     add_common_args(summary)
