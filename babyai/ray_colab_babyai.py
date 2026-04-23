@@ -1,26 +1,34 @@
 #!/usr/bin/env python3
-"""Run BabyAI demo generation/training on Colab with Ray CPU workers.
+"""Ray-friendly BabyAI Colab runner with separate demo/train commands.
 
-Use this after `python colab_babyai_baseline.py --setup`.
+Use after:
+    python colab_babyai_baseline.py --setup
+    pip install -q "ray[default]"
 
-Recommended Colab CPU workflow:
-    !pip install -q "ray[default]"
-    !python ray_colab_babyai.py --generate-only --episodes 10000 --val-episodes 512 --num-workers 4
-    !python ray_colab_babyai.py --train-only --episodes 10000 --epochs 20 --epoch-length 10000 --num-workers 2
+Examples:
+    # One level only, then stop.
+    python ray_colab_babyai.py run-level --level GoToObjMaze
 
-Notes:
-    - Demo generation is CPU-only and parallelizes well.
-    - Training is also forced onto CPU here. Run fewer concurrent train workers
-      than demo workers because each trainer is heavier.
+    # Parallel demo generation across default levels.
+    python ray_colab_babyai.py demo --all-default-levels --num-workers 4
+
+    # Train one level only.
+    python ray_colab_babyai.py train --level GoTo
+
+    # Parallel CPU training across explicitly selected levels.
+    python ray_colab_babyai.py train --levels GoToObjMaze GoTo --num-workers 2 --cpus-per-train 2
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
+import pickle
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -38,6 +46,30 @@ DEFAULT_LEVELS = [
     "Synth",
     "BossLevel",
 ]
+
+TASK_TIMINGS: list[tuple[str, str, float]] = []
+
+
+def format_duration(seconds: float) -> str:
+    seconds = int(round(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m {secs}s"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
+def timed(label: str, fn):
+    start = time.time()
+    result = fn()
+    elapsed = time.time() - start
+    return result, elapsed
+
+
+def record_timing(level: str, task: str, elapsed: float) -> None:
+    TASK_TIMINGS.append((level, task, elapsed))
 
 
 def env_id(level: str) -> str:
@@ -60,22 +92,77 @@ def model_name(level: str, episodes: int, epochs: int) -> str:
     return f"{level.lower()}_cpu_ray_{episodes // 1000}k_e{epochs}"
 
 
-def child_env() -> dict[str, str]:
+def count_generated_episodes(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    try:
+        import gzip
+
+        with gzip.open(path, "rb") as f:
+            data = pickle.load(f)
+        return len(data.get("episodes", []))
+    except Exception:
+        return None
+
+
+def count_native_demos(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    try:
+        with path.open("rb") as f:
+            data = pickle.load(f)
+        return len(data)
+    except Exception:
+        return None
+
+
+def completed_epochs(model: str) -> int:
+    status_path = STORAGE / "logs" / model / "status.json"
+    if status_path.exists():
+        try:
+            return int(json.load(status_path.open()).get("i", 0))
+        except Exception:
+            pass
+
+    log_path = STORAGE / "logs" / model / "log.csv"
+    if not log_path.exists():
+        return 0
+    try:
+        rows = list(csv.DictReader(log_path.open()))
+        if not rows:
+            return 0
+        return max(int(row["update"]) for row in rows if row.get("update"))
+    except Exception:
+        return 0
+
+
+def model_checkpoint_exists(model: str) -> bool:
+    return (STORAGE / "models" / model / "model.pt").exists()
+
+
+def selected_levels(args: argparse.Namespace) -> list[str]:
+    if getattr(args, "all_default_levels", False):
+        return DEFAULT_LEVELS
+    if getattr(args, "levels", None):
+        return args.levels
+    return [args.level]
+
+
+def child_env(force_cpu: bool = True) -> dict[str, str]:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(BABYAI_SRC)
     env["BABYAI_STORAGE"] = str(STORAGE)
     env["MPLCONFIGDIR"] = str(ROOT / ".mplconfig")
-    # Force CPU. This avoids tiny CUDA kernels / CPU-GPU synchronization overhead
-    # dominating these small BabyAI models on Colab.
-    env["CUDA_VISIBLE_DEVICES"] = ""
+    if force_cpu:
+        env["CUDA_VISIBLE_DEVICES"] = ""
     return env
 
 
-def run(cmd: list[str]) -> str:
+def run(cmd: list[str], force_cpu: bool = True) -> str:
     proc = subprocess.run(
         cmd,
         cwd=ROOT,
-        env=child_env(),
+        env=child_env(force_cpu=force_cpu),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -84,16 +171,19 @@ def run(cmd: list[str]) -> str:
     return proc.stdout
 
 
-def generate_level(level: str, episodes: int, val_episodes: int, max_steps: int) -> str:
+def generate_level(level: str, episodes: int, val_episodes: int, max_steps: int, force: bool) -> str:
+    task_start = time.time()
     DEMOS.mkdir(exist_ok=True)
     outputs = [f"=== generate {level} ==="]
 
     train = train_path(level, episodes)
-    if train.exists():
-        outputs.append(f"using existing {train}")
+    train_count = count_generated_episodes(train)
+    if not force and train_count is not None and train_count >= episodes:
+        outputs.append(f"using existing {train} ({train_count} demos)")
     else:
-        outputs.append(
-            run([
+        if train.exists():
+            outputs.append(f"regenerating incomplete/unreadable {train} (count={train_count})")
+        out, elapsed = timed("generate_train", lambda: run([
                 sys.executable,
                 "generate_bot_demos.py",
                 "--env",
@@ -106,15 +196,18 @@ def generate_level(level: str, episodes: int, val_episodes: int, max_steps: int)
                 "1",
                 "--max-steps",
                 str(max_steps),
-            ])
-        )
+            ]))
+        outputs.append(out)
+        outputs.append(f"train demo generation elapsed: {format_duration(elapsed)}")
 
     valid = valid_path(level, val_episodes)
-    if valid.exists():
-        outputs.append(f"using existing {valid}")
+    valid_count = count_generated_episodes(valid)
+    if not force and valid_count is not None and valid_count >= val_episodes:
+        outputs.append(f"using existing {valid} ({valid_count} demos)")
     else:
-        outputs.append(
-            run([
+        if valid.exists():
+            outputs.append(f"regenerating incomplete/unreadable {valid} (count={valid_count})")
+        out, elapsed = timed("generate_valid", lambda: run([
                 sys.executable,
                 "generate_bot_demos.py",
                 "--env",
@@ -127,9 +220,12 @@ def generate_level(level: str, episodes: int, val_episodes: int, max_steps: int)
                 "1000000000",
                 "--max-steps",
                 str(max_steps),
-            ])
-        )
+            ]))
+        outputs.append(out)
+        outputs.append(f"valid demo generation elapsed: {format_duration(elapsed)}")
 
+    total_elapsed = time.time() - task_start
+    outputs.append(f"generate {level} total elapsed: {format_duration(total_elapsed)}")
     return "\n".join(outputs)
 
 
@@ -141,42 +237,62 @@ def train_level(
     epoch_length: int,
     batch_size: int,
     patience: int,
+    force_cpu: bool,
+    force: bool,
 ) -> str:
+    task_start = time.time()
     STORAGE.joinpath("demos").mkdir(parents=True, exist_ok=True)
     outputs = [f"=== train {level} ==="]
 
     name = demo_name(level, episodes)
+    model = model_name(level, episodes, epochs)
+    done_epochs = completed_epochs(model)
+    if not force and done_epochs >= epochs and model_checkpoint_exists(model):
+        return (
+            f"=== train {level} ===\n"
+            f"skipping completed model {model}: {done_epochs}/{epochs} epochs"
+        )
+
     train_native = STORAGE / "demos" / f"{name}.pkl"
     valid_native = STORAGE / "demos" / f"{name}_valid.pkl"
 
-    outputs.append(
-        run([
-            sys.executable,
-            "convert_bot_demos_to_babyai.py",
-            "--input",
-            str(train_path(level, episodes)),
-            "--output",
-            str(train_native),
-            "--limit",
-            str(episodes),
-        ])
-    )
-    outputs.append(
-        run([
-            sys.executable,
-            "convert_bot_demos_to_babyai.py",
-            "--input",
-            str(valid_path(level, val_episodes)),
-            "--output",
-            str(valid_native),
-            "--limit",
-            str(val_episodes),
-        ])
-    )
+    train_native_count = count_native_demos(train_native)
+    if not force and train_native_count is not None and train_native_count >= episodes:
+        outputs.append(f"using existing {train_native} ({train_native_count} demos)")
+    else:
+        out, elapsed = timed("convert_train", lambda: run([
+                sys.executable,
+                "convert_bot_demos_to_babyai.py",
+                "--input",
+                str(train_path(level, episodes)),
+                "--output",
+                str(train_native),
+                "--limit",
+                str(episodes),
+            ], force_cpu=force_cpu))
+        outputs.append(out)
+        outputs.append(f"train conversion elapsed: {format_duration(elapsed)}")
 
-    model = model_name(level, episodes, epochs)
-    outputs.append(
-        run([
+    valid_native_count = count_native_demos(valid_native)
+    if not force and valid_native_count is not None and valid_native_count >= val_episodes:
+        outputs.append(f"using existing {valid_native} ({valid_native_count} demos)")
+    else:
+        out, elapsed = timed("convert_valid", lambda: run([
+                sys.executable,
+                "convert_bot_demos_to_babyai.py",
+                "--input",
+                str(valid_path(level, val_episodes)),
+                "--output",
+                str(valid_native),
+                "--limit",
+                str(val_episodes),
+            ], force_cpu=force_cpu))
+        outputs.append(out)
+        outputs.append(f"valid conversion elapsed: {format_duration(elapsed)}")
+
+    if done_epochs > 0:
+        outputs.append(f"resuming {model} from epoch {done_epochs}/{epochs}")
+    out, elapsed = timed("train", lambda: run([
             sys.executable,
             str(BABYAI_SRC / "scripts" / "train_il.py"),
             "--env",
@@ -203,13 +319,16 @@ def train_level(
             str(patience),
             "--save-interval",
             "0",
-        ])
-    )
+        ], force_cpu=force_cpu))
+    outputs.append(out)
+    outputs.append(f"training elapsed: {format_duration(elapsed)}")
 
+    total_elapsed = time.time() - task_start
+    outputs.append(f"train {level} total elapsed: {format_duration(total_elapsed)}")
     return "\n".join(outputs)
 
 
-def summarize(levels: list[str], episodes: int, epochs: int) -> None:
+def summarize(levels: list[str], episodes: int, epochs: int, timings: list[tuple[str, str, float]] | None = None) -> None:
     print("\nSummary")
     for level in levels:
         log_path = STORAGE / "logs" / model_name(level, episodes, epochs) / "log.csv"
@@ -228,11 +347,108 @@ def summarize(levels: list[str], episodes: int, epochs: int) -> None:
             f"last_success={float(last['validation_success_rate']):.3f} "
             f"last_valid_acc={float(last['validation_accuracy']):.3f}"
         )
+    if timings:
+        print("\nElapsed Times")
+        for level, task, elapsed in timings:
+            print(f"{level:12s} {task:12s} {format_duration(elapsed)}")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--levels", nargs="+", default=DEFAULT_LEVELS)
+def init_ray(num_workers: int):
+    try:
+        import ray
+    except ImportError as exc:
+        raise SystemExit(
+            "Ray is not installed. In Colab run: !pip install -q 'ray[default]'"
+        ) from exc
+    ray.init(num_cpus=num_workers, ignore_reinit_error=True, include_dashboard=False)
+    return ray
+
+
+def run_demo_command(args: argparse.Namespace) -> None:
+    levels = selected_levels(args)
+    command_start = time.time()
+    ray = init_ray(args.num_workers)
+    gen_task = ray.remote(num_cpus=1)(generate_level)
+    refs = [
+        gen_task.remote(level, args.episodes, args.val_episodes, args.max_steps, args.force)
+        for level in levels
+    ]
+    timings: list[tuple[str, str, float]] = []
+    for level, ref in zip(levels, refs):
+        start = time.time()
+        print(ray.get(ref), flush=True)
+        elapsed = time.time() - start
+        timings.append((level, "demo_wait", elapsed))
+    timings.append(("ALL", "demo_total", time.time() - command_start))
+    summarize(levels, args.episodes, args.epochs, timings)
+
+
+def run_train_command(args: argparse.Namespace) -> None:
+    levels = selected_levels(args)
+    command_start = time.time()
+    ray = init_ray(args.num_workers)
+    train_task = ray.remote(num_cpus=args.cpus_per_train)(train_level)
+    refs = [
+        train_task.remote(
+            level,
+            args.episodes,
+            args.val_episodes,
+            args.epochs,
+            args.epoch_length,
+            args.batch_size,
+            args.patience,
+            not args.use_gpu,
+            args.force,
+        )
+        for level in levels
+    ]
+    timings: list[tuple[str, str, float]] = []
+    for level, ref in zip(levels, refs):
+        start = time.time()
+        print(ray.get(ref), flush=True)
+        elapsed = time.time() - start
+        timings.append((level, "train_wait", elapsed))
+    timings.append(("ALL", "train_total", time.time() - command_start))
+    summarize(levels, args.episodes, args.epochs, timings)
+
+
+def run_one_level_command(args: argparse.Namespace) -> None:
+    level = args.level
+    command_start = time.time()
+    timings: list[tuple[str, str, float]] = []
+    out, elapsed = timed(
+        "generate_level",
+        lambda: generate_level(level, args.episodes, args.val_episodes, args.max_steps, args.force),
+    )
+    print(out, flush=True)
+    timings.append((level, "demo", elapsed))
+    out, elapsed = timed(
+        "train_level",
+        lambda: train_level(
+            level,
+            args.episodes,
+            args.val_episodes,
+            args.epochs,
+            args.epoch_length,
+            args.batch_size,
+            args.patience,
+            not args.use_gpu,
+            args.force,
+        ),
+    )
+    print(
+        out,
+        flush=True,
+    )
+    timings.append((level, "train", elapsed))
+    timings.append(("ALL", "run_total", time.time() - command_start))
+    summarize([level], args.episodes, args.epochs, timings)
+
+
+def add_common_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--level", default=DEFAULT_LEVELS[0])
+    parser.add_argument("--levels", nargs="+", default=None)
+    parser.add_argument("--all-default-levels", action="store_true")
     parser.add_argument("--episodes", type=int, default=10000)
     parser.add_argument("--val-episodes", type=int, default=512)
     parser.add_argument("--epochs", type=int, default=20)
@@ -240,52 +456,45 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=4096)
-    parser.add_argument("--num-workers", type=int, default=2)
-    parser.add_argument("--generate-only", action="store_true")
-    parser.add_argument("--train-only", action="store_true")
+    parser.add_argument("--force", action="store_true")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    demo = subparsers.add_parser("demo", help="Generate train/valid demos only.")
+    add_common_args(demo)
+    demo.add_argument("--num-workers", type=int, default=4)
+
+    train = subparsers.add_parser("train", help="Train from existing demos only.")
+    add_common_args(train)
+    train.add_argument("--num-workers", type=int, default=1)
+    train.add_argument("--cpus-per-train", type=int, default=2)
+    train.add_argument("--use-gpu", action="store_true")
+
+    run_level = subparsers.add_parser("run-level", help="Generate and train exactly one level, then stop.")
+    add_common_args(run_level)
+    run_level.add_argument("--use-gpu", action="store_true")
+
+    summary = subparsers.add_parser("summary", help="Print summaries from existing logs.")
+    add_common_args(summary)
+
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-
-    try:
-        import ray
-    except ImportError as exc:
-        raise SystemExit(
-            "Ray is not installed. In Colab run: !pip install -q 'ray[default]'"
-        ) from exc
-
-    ray.init(num_cpus=args.num_workers, ignore_reinit_error=True, include_dashboard=False)
-
-    gen_task = ray.remote(num_cpus=1)(generate_level)
-    train_task = ray.remote(num_cpus=1)(train_level)
-
-    if not args.train_only:
-        refs = [
-            gen_task.remote(level, args.episodes, args.val_episodes, args.max_steps)
-            for level in args.levels
-        ]
-        for ref in refs:
-            print(ray.get(ref), flush=True)
-
-    if not args.generate_only:
-        refs = [
-            train_task.remote(
-                level,
-                args.episodes,
-                args.val_episodes,
-                args.epochs,
-                args.epoch_length,
-                args.batch_size,
-                args.patience,
-            )
-            for level in args.levels
-        ]
-        for ref in refs:
-            print(ray.get(ref), flush=True)
-
-    summarize(args.levels, args.episodes, args.epochs)
+    if args.command == "demo":
+        run_demo_command(args)
+    elif args.command == "train":
+        run_train_command(args)
+    elif args.command == "run-level":
+        run_one_level_command(args)
+    elif args.command == "summary":
+        summarize(selected_levels(args), args.episodes, args.epochs)
+    else:
+        raise ValueError(args.command)
 
 
 if __name__ == "__main__":
