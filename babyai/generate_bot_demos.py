@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""Generate BabyAI demonstrations with the hand-coded bot.
-
-This script targets the original `mila-iqia/babyai` package used by the ICLR
-paper. It creates an environment, asks `babyai.bot.Bot` for actions, steps the
-environment, and stores successful trajectories in a gzip-compressed pickle.
-
-Example:
-    python generate_bot_demos.py \
-        --env BabyAI-GoToRedBall-v0 \
-        --episodes 1000 \
-        --output demos.pkl.gz
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -19,107 +6,32 @@ import gzip
 import pickle
 import sys
 import time
+import argparse, gzip, pickle, sys
 from pathlib import Path
-from typing import Any
 
-
-Episode = dict[str, Any]
-
-
-def import_babyai_runtime():
-    """Import BabyAI's original runtime with a helpful error if unavailable."""
-    local_babyai = Path(__file__).resolve().parent / "original_babyai_iclr19"
-    if local_babyai.exists():
-        sys.path.insert(0, str(local_babyai))
-
-    try:
-        import gym  # type: ignore
-        import babyai  # noqa: F401  # type: ignore
-        from babyai.bot import Bot  # type: ignore
-    except ImportError as exc:
-        raise SystemExit(
-            "Could not import the original BabyAI runtime.\n\n"
-            "Install it in an environment that has the ICLR-era BabyAI package, "
-            "for example:\n"
-            "  git clone https://github.com/mila-iqia/babyai.git\n"
-            "  cd babyai\n"
-            "  pip install -e .\n\n"
-            "You also need the compatible gym-minigrid dependency used by that "
-            "BabyAI version."
-        ) from exc
-
+def import_runtime():
+    sys.path.insert(0, str(Path.cwd() / "babyai_iclr19"))
+    import gym, babyai
+    from babyai.bot import Bot
     return gym, Bot
 
+def reset_env(env, seed=None):
+    if seed is not None and hasattr(env, "seed"):
+        env.seed(seed)
+    return env.reset()
 
-def reset_env(env, seed: int | None = None):
-    """Handle both old Gym and newer Gymnasium-style reset signatures."""
-    try:
-        reset_result = env.reset(seed=seed)
-    except TypeError:
-        if seed is not None and hasattr(env, "seed"):
-            env.seed(seed)
-        reset_result = env.reset()
-
-    if isinstance(reset_result, tuple) and len(reset_result) == 2:
-        obs, _info = reset_result
-        return obs
-    return reset_result
-
-
-def step_env(env, action: int):
-    """Normalize old Gym and Gymnasium step signatures."""
-    step_result = env.step(action)
-
-    if len(step_result) == 5:
-        obs, reward, terminated, truncated, info = step_result
-        done = terminated or truncated
-        return obs, reward, done, info
-
-    obs, reward, done, info = step_result
-    return obs, reward, done, info
-
-
-def mission_text(env) -> str:
-    """Read the human-readable mission string from common BabyAI env variants."""
-    if hasattr(env, "mission"):
-        return env.mission
-    if hasattr(env, "instrs") and hasattr(env.instrs, "surface"):
-        return env.instrs.surface(env)
-    return ""
-
-
-def rollout_bot_episode(env, Bot, seed: int | None, max_steps: int) -> Episode | None:
-    """Run one bot-controlled episode and return it if successful."""
+def rollout(env, Bot, seed, max_steps):
     obs = reset_env(env, seed)
     bot = Bot(env)
-
-    observations: list[Any] = [obs]
-    actions: list[int] = []
-    rewards: list[float] = []
-    dones: list[bool] = []
-
-    last_action = None
+    observations, actions, rewards, dones = [obs], [], [], []
     for _ in range(max_steps):
-        action = bot.replan(last_action)
-        obs, reward, done, _info = step_env(env, action)
-
-        actions.append(int(action))
-        rewards.append(float(reward))
-        dones.append(bool(done))
-        observations.append(obs)
-
-        last_action = action
+        action = bot.replan()
+        obs, reward, done, _ = env.step(action)
+        actions.append(int(action)); rewards.append(float(reward)); dones.append(bool(done)); observations.append(obs)
         if done:
             if reward > 0:
-                return {
-                    "mission": mission_text(env),
-                    "observations": observations,
-                    "actions": actions,
-                    "rewards": rewards,
-                    "dones": dones,
-                }
+                return {"mission": env.mission, "observations": observations, "actions": actions, "rewards": rewards, "dones": dones}
             return None
-
     return None
 
 
@@ -189,15 +101,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
-    generate_demos(
-        env_name=args.env,
-        episodes=args.episodes,
-        output_path=args.output,
-        seed=args.seed,
-        max_steps=args.max_steps,
-    )
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--env", required=True); p.add_argument("--episodes", type=int, default=1000)
+    p.add_argument("--output", required=True); p.add_argument("--seed", type=int, default=1); p.add_argument("--max-steps", type=int, default=4096)
+    args = p.parse_args()
+    gym, Bot = import_runtime()
+    env = gym.make(args.env, disable_env_checker=True).unwrapped
+    demos, attempts = [], 0
+    while len(demos) < args.episodes:
+        ep = rollout(env, Bot, args.seed + attempts, args.max_steps)
+        attempts += 1
+        if ep is not None:
+            demos.append(ep)
+            if len(demos) % 100 == 0:
+                print(f"collected {len(demos)}/{args.episodes}", flush=True)
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    pickle.dump({"env": args.env, "seed": args.seed, "attempts": attempts, "episodes": demos}, gzip.open(args.output, "wb"), protocol=pickle.HIGHEST_PROTOCOL)
+    print(f"wrote {len(demos)} demos to {args.output}")
 
 
 if __name__ == "__main__":
