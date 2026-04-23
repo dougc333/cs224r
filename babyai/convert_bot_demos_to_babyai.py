@@ -4,8 +4,21 @@ import argparse, gzip, pickle, sys
 from pathlib import Path
 import blosc, numpy as np
 
+
+def add_local_babyai_to_path() -> Path:
+    root = Path(__file__).resolve().parent
+    for dirname in ("original_babyai_iclr19", "babyai_iclr19", "original_babyai"):
+        candidate = root / dirname
+        if candidate.exists() and (candidate / "babyai").is_dir():
+            sys.path.insert(0, str(candidate))
+            return candidate
+    raise SystemExit(
+        "Could not locate a local BabyAI checkout with a babyai package. "
+        "Expected one of: original_babyai_iclr19/, babyai_iclr19/, original_babyai/."
+    )
+
 def main():
-    sys.path.insert(0, str(Path.cwd() / "babyai_iclr19"))
+    add_local_babyai_to_path()
     from babyai import utils
     p = argparse.ArgumentParser()
     p.add_argument("--input", required=True); p.add_argument("--output", required=True); p.add_argument("--limit", type=int, default=None)

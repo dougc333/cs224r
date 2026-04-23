@@ -34,7 +34,6 @@ from pathlib import Path
 
 
 ROOT = Path.cwd()
-BABYAI_SRC = ROOT / "babyai_iclr19"
 STORAGE = ROOT / "babyai_storage"
 DEMOS = ROOT / "demos_iclr19"
 
@@ -49,6 +48,20 @@ DEFAULT_LEVELS = [
 ]
 
 TASK_TIMINGS: list[tuple[str, str, float]] = []
+
+
+def find_babyai_src() -> Path:
+    for dirname in ("original_babyai_iclr19", "babyai_iclr19", "original_babyai"):
+        candidate = ROOT / dirname
+        if candidate.exists() and (candidate / "babyai").is_dir():
+            return candidate
+    raise SystemExit(
+        "Could not locate a local BabyAI checkout with a babyai package. "
+        "Expected one of: original_babyai_iclr19/, babyai_iclr19/, original_babyai/."
+    )
+
+
+BABYAI_SRC = find_babyai_src()
 
 
 def format_duration(seconds: float) -> str:
