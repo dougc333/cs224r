@@ -1,0 +1,2 @@
+demos_iclr19/*.pkl.gz filter=lfs diff=lfs merge=lfs -text
+babyai_storage/demos/*.pkl filter=lfs diff=lfs merge=lfs -text
