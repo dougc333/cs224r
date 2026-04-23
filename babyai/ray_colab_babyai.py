@@ -19,7 +19,7 @@ Examples:
     python ray_colab_babyai.py train --levels GoToObjMaze GoTo --num-workers 2 --cpus-per-train 2
 """
 
-from __future__ import annotations
+print('demo sharded in this version')
 
 import argparse
 import csv
