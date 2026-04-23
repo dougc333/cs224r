@@ -1,0 +1,6 @@
+[submodule "babyai/original_babyai"]
+	path = babyai/original_babyai
+	url = https://github.com/mila-iqia/babyai.git
+[submodule "babyai/original_babyai_iclr19"]
+	path = babyai/original_babyai_iclr19
+	url = https://github.com/mila-iqia/babyai.git
