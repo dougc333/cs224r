@@ -184,6 +184,14 @@ def model_checkpoint_exists(model: str) -> bool:
     return (STORAGE / "models" / model / "model.pt").exists()
 
 
+def best_model_checkpoint_exists(model: str) -> bool:
+    return (STORAGE / "models" / f"{model}_best" / "model.pt").exists()
+
+
+def best_model_path(model: str) -> Path:
+    return STORAGE / "models" / f"{model}_best" / "model.pt"
+
+
 def selected_levels(args: argparse.Namespace) -> list[str]:
     if getattr(args, "all_default_levels", False):
         return DEFAULT_LEVELS
@@ -470,6 +478,10 @@ def train_level(
     ], force_cpu=force_cpu, stream_callback=stream_train_status))
     outputs.append(out)
     outputs.append(f"training elapsed: {format_duration(elapsed)}")
+    if best_model_checkpoint_exists(model):
+        outputs.append(f"best checkpoint: {best_model_path(model)}")
+    elif model_checkpoint_exists(model):
+        outputs.append(f"latest checkpoint only: {STORAGE / 'models' / model / 'model.pt'}")
 
     total_elapsed = time.time() - task_start
     outputs.append(f"train {level} total elapsed: {format_duration(total_elapsed)}")
@@ -489,11 +501,14 @@ def summarize(levels: list[str], episodes: int, epochs: int, timings: list[tuple
             continue
         best = max(rows, key=lambda r: float(r["validation_success_rate"]))
         last = rows[-1]
+        model = model_name(level, episodes, epochs)
+        best_ckpt = best_model_path(model)
         print(
             f"{level:12s} "
             f"best_success={float(best['validation_success_rate']):.3f} "
             f"last_success={float(last['validation_success_rate']):.3f} "
-            f"last_valid_acc={float(last['validation_accuracy']):.3f}"
+            f"last_valid_acc={float(last['validation_accuracy']):.3f} "
+            f"best_ckpt={'yes' if best_ckpt.exists() else 'no'}"
         )
     if timings:
         print("\nElapsed Times")
