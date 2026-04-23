@@ -363,6 +363,7 @@ def train_level(
     force_cpu: bool,
     force: bool,
     record_validation_video: bool,
+    tb: bool,
 ) -> str:
     task_start = time.time()
     STORAGE.joinpath("demos").mkdir(parents=True, exist_ok=True)
@@ -498,6 +499,8 @@ def train_level(
     ]
     if video_dir is not None:
         train_cmd.extend(["--validation-video-dir", str(video_dir)])
+    if tb:
+        train_cmd.append("--tb")
     out, elapsed = timed("train", lambda: run(train_cmd, force_cpu=force_cpu, stream_callback=stream_train_status))
     outputs.append(out)
     outputs.append(f"training elapsed: {format_duration(elapsed)}")
@@ -507,6 +510,8 @@ def train_level(
         outputs.append(f"latest checkpoint only: {STORAGE / 'models' / model / 'model.pt'}")
     if video_dir is not None:
         outputs.append(f"validation videos dir: {video_dir}")
+    if tb:
+        outputs.append(f"tensorboard log dir: {STORAGE / 'logs' / model}")
 
     total_elapsed = time.time() - task_start
     outputs.append(f"train {level} total elapsed: {format_duration(total_elapsed)}")
@@ -685,6 +690,7 @@ def run_train_command(args: argparse.Namespace) -> None:
             not args.use_gpu,
             args.force,
             args.record_validation_video,
+            args.tb,
         )
     timings: list[tuple[str, str, float]] = []
     start_times = {level: time.time() for level in levels}
@@ -725,6 +731,7 @@ def run_one_level_command(args: argparse.Namespace) -> None:
             not args.use_gpu,
             args.force,
             args.record_validation_video,
+            args.tb,
         ),
     )
     print(
@@ -770,11 +777,13 @@ def parse_args() -> argparse.Namespace:
     train.add_argument("--cpus-per-train", type=int, default=2)
     train.add_argument("--use-gpu", action="store_true")
     train.add_argument("--record-validation-video", action="store_true")
+    train.add_argument("--tb", action="store_true")
 
     run_level = subparsers.add_parser("run-level", help="Generate and train exactly one level, then stop.")
     add_common_args(run_level)
     run_level.add_argument("--use-gpu", action="store_true")
     run_level.add_argument("--record-validation-video", action="store_true")
+    run_level.add_argument("--tb", action="store_true")
 
     summary = subparsers.add_parser("summary", help="Print summaries from existing logs.")
     add_common_args(summary)
