@@ -90,10 +90,31 @@ def setup() -> None:
     replace(BABYAI_REPO / "babyai" / "evaluate.py", "gym.make(env_name)", "gym.make(env_name, disable_env_checker=True)")
 
     # PyTorch 2.6+ loads full model pickles with weights_only=True by default; old BabyAI saves full modules.
-    replace(
+    write_file(
         BABYAI_REPO / "babyai" / "utils" / "model.py",
-        "model = torch.load(path)",
-        "try:\n            model = torch.load(path, weights_only=False)\n        except TypeError:\n            model = torch.load(path)",
+        "import os\n"
+        "import torch\n\n"
+        "from .. import utils\n\n\n"
+        "def get_model_dir(model_name):\n"
+        "    return os.path.join(utils.storage_dir(), \"models\", model_name)\n\n\n"
+        "def get_model_path(model_name):\n"
+        "    return os.path.join(get_model_dir(model_name), \"model.pt\")\n\n\n"
+        "def load_model(model_name, raise_not_found=True):\n"
+        "    path = get_model_path(model_name)\n"
+        "    try:\n"
+        "        try:\n"
+        "            model = torch.load(path, weights_only=False)\n"
+        "        except TypeError:\n"
+        "            model = torch.load(path)\n"
+        "        model.eval()\n"
+        "        return model\n"
+        "    except FileNotFoundError:\n"
+        "        if raise_not_found:\n"
+        "            raise FileNotFoundError(\"No model found at {}\".format(path))\n\n\n"
+        "def save_model(model, model_name):\n"
+        "    path = get_model_path(model_name)\n"
+        "    utils.create_folders_if_necessary(path)\n"
+        "    torch.save(model, path)\n",
     )
 
     write_file(ROOT / "generate_bot_demos.py", GENERATE_BOT_DEMOS)
@@ -228,8 +249,20 @@ from __future__ import annotations
 import argparse, gzip, pickle, sys, time
 from pathlib import Path
 
+def add_local_babyai_to_path():
+    root = Path(__file__).resolve().parent
+    for dirname in ("original_babyai_iclr19", "babyai_iclr19", "original_babyai"):
+        candidate = root / dirname
+        if candidate.exists() and (candidate / "babyai").is_dir():
+            sys.path.insert(0, str(candidate))
+            return
+    raise SystemExit(
+        "Could not import BabyAI/Gym runtime. Run the setup first, or make sure "
+        "a patched BabyAI checkout exists at original_babyai_iclr19/ or babyai_iclr19/."
+    )
+
 def import_runtime():
-    sys.path.insert(0, str(Path.cwd() / "babyai_iclr19"))
+    add_local_babyai_to_path()
     import gym, babyai
     from babyai.bot import Bot
     return gym, Bot
@@ -275,8 +308,8 @@ def main():
                 last_log_time = now
                 rate = 100 / interval if interval > 0 else float("inf")
                 print(
-                    f"collected {len(demos)}/{args.episodes} | elapsed {elapsed:.1f}s "
-                    f"| last100 {interval:.1f}s | rate {rate:.2f} demos/s",
+                    f"collected {len(demos)}/{args.episodes} successful demos | elapsed {elapsed:.1f}s "
+                    f"| last100 {interval:.1f}s | rate {rate:.2f} demos/s | attempts {attempts}",
                     flush=True,
                 )
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
@@ -293,8 +326,20 @@ import argparse, gzip, pickle, sys
 from pathlib import Path
 import blosc, numpy as np
 
+def add_local_babyai_to_path():
+    root = Path(__file__).resolve().parent
+    for dirname in ("original_babyai_iclr19", "babyai_iclr19", "original_babyai"):
+        candidate = root / dirname
+        if candidate.exists() and (candidate / "babyai").is_dir():
+            sys.path.insert(0, str(candidate))
+            return
+    raise SystemExit(
+        "Could not locate a local BabyAI checkout with a babyai package. "
+        "Expected one of: original_babyai_iclr19/, babyai_iclr19/, original_babyai/."
+    )
+
 def main():
-    sys.path.insert(0, str(Path.cwd() / "babyai_iclr19"))
+    add_local_babyai_to_path()
     from babyai import utils
     p = argparse.ArgumentParser()
     p.add_argument("--input", required=True); p.add_argument("--output", required=True); p.add_argument("--limit", type=int, default=None)
