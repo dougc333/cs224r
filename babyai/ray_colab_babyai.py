@@ -209,8 +209,13 @@ def run(cmd: list[str], force_cpu: bool = True) -> str:
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        check=True,
     )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            "Command failed with exit code "
+            f"{proc.returncode}: {' '.join(cmd)}\n\n"
+            f"Captured output:\n{proc.stdout}"
+        )
     return proc.stdout
 
 

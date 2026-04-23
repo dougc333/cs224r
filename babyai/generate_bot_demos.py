@@ -35,7 +35,7 @@ def add_local_babyai_to_path() -> None:
     root = Path(__file__).resolve().parent
     for dirname in ("original_babyai_iclr19", "babyai_iclr19", "original_babyai"):
         candidate = root / dirname
-        if candidate.exists():
+        if candidate.exists() and (candidate / "babyai").is_dir():
             sys.path.insert(0, str(candidate))
             return
 
