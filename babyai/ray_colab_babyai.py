@@ -84,6 +84,10 @@ def valid_path(level: str, val_episodes: int) -> Path:
     return DEMOS / f"{level}_valid_{val_episodes}.pkl.gz"
 
 
+def shard_path(level: str, split: str, total: int, shard_index: int) -> Path:
+    return DEMOS / "shards" / f"{level}_{split}_{total}_shard{shard_index}.pkl.gz"
+
+
 def demo_name(level: str, episodes: int) -> str:
     return f"{level.lower()}_{episodes}"
 
@@ -108,6 +112,45 @@ def count_generated_episodes(path: Path) -> int | None:
 def count_native_demos(path: Path) -> int | None:
     if not path.exists():
         return None
+
+
+def merge_generated_shards(shard_paths: list[Path], output_path: Path, expected_total: int, env_name: str, seed: int, force: bool) -> str:
+    output_count = count_generated_episodes(output_path)
+    if not force and output_count is not None and output_count >= expected_total:
+        return f"using existing merged {output_path} ({output_count} demos)"
+
+    episodes = []
+    attempts = 0
+    for path in shard_paths:
+        if not path.exists():
+            raise FileNotFoundError(f"Missing shard {path}")
+        import gzip
+
+        with gzip.open(path, "rb") as f:
+            data = pickle.load(f)
+        shard_episodes = data.get("episodes", [])
+        episodes.extend(shard_episodes)
+        attempts += int(data.get("attempts", len(shard_episodes)))
+
+    if len(episodes) < expected_total:
+        raise RuntimeError(f"Only {len(episodes)} demos available, expected {expected_total}")
+
+    episodes = episodes[:expected_total]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    import gzip
+
+    with gzip.open(output_path, "wb") as f:
+        pickle.dump(
+            {
+                "env": env_name,
+                "seed": seed,
+                "attempts": attempts,
+                "episodes": episodes,
+            },
+            f,
+            protocol=pickle.HIGHEST_PROTOCOL,
+        )
+    return f"merged {len(episodes)} demos into {output_path}"
     try:
         with path.open("rb") as f:
             data = pickle.load(f)
@@ -227,6 +270,43 @@ def generate_level(level: str, episodes: int, val_episodes: int, max_steps: int,
     total_elapsed = time.time() - task_start
     outputs.append(f"generate {level} total elapsed: {format_duration(total_elapsed)}")
     return "\n".join(outputs)
+
+
+def generate_shard(
+    level: str,
+    split: str,
+    shard_index: int,
+    shard_episodes: int,
+    total: int,
+    seed: int,
+    max_steps: int,
+    force: bool,
+) -> str:
+    path = shard_path(level, split, total, shard_index)
+    existing_count = count_generated_episodes(path)
+    if not force and existing_count is not None and existing_count >= shard_episodes:
+        return f"using existing {path} ({existing_count} demos)"
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    out, elapsed = timed("generate_shard", lambda: run([
+        sys.executable,
+        "generate_bot_demos.py",
+        "--env",
+        env_id(level),
+        "--episodes",
+        str(shard_episodes),
+        "--output",
+        str(path),
+        "--seed",
+        str(seed),
+        "--max-steps",
+        str(max_steps),
+    ]))
+    return "\n".join([
+        f"=== generate shard {level} {split} #{shard_index} ===",
+        out,
+        f"shard elapsed: {format_duration(elapsed)}",
+    ])
 
 
 def train_level(
@@ -383,6 +463,97 @@ def run_demo_command(args: argparse.Namespace) -> None:
     summarize(levels, args.episodes, args.epochs, timings)
 
 
+def shard_sizes(total: int, shards: int) -> list[int]:
+    base, remainder = divmod(total, shards)
+    return [base + (1 if i < remainder else 0) for i in range(shards)]
+
+
+def run_demo_sharded_command(args: argparse.Namespace) -> None:
+    level = args.level
+    command_start = time.time()
+    ray = init_ray(args.num_workers)
+    shard_task = ray.remote(num_cpus=1)(generate_shard)
+
+    train_sizes = shard_sizes(args.episodes, args.shards)
+    valid_sizes = shard_sizes(args.val_episodes, args.valid_shards or args.shards)
+
+    refs = []
+    train_shards = []
+    seed_offset = 1
+    for index, size in enumerate(train_sizes):
+        path = shard_path(level, "train", args.episodes, index)
+        train_shards.append(path)
+        refs.append(
+            shard_task.remote(
+                level,
+                "train",
+                index,
+                size,
+                args.episodes,
+                seed_offset,
+                args.max_steps,
+                args.force,
+            )
+        )
+        seed_offset += size
+
+    valid_shards = []
+    seed_offset = 1_000_000_000
+    for index, size in enumerate(valid_sizes):
+        path = shard_path(level, "valid", args.val_episodes, index)
+        valid_shards.append(path)
+        refs.append(
+            shard_task.remote(
+                level,
+                "valid",
+                index,
+                size,
+                args.val_episodes,
+                seed_offset,
+                args.max_steps,
+                args.force,
+            )
+        )
+        seed_offset += size
+
+    for ref in refs:
+        print(ray.get(ref), flush=True)
+
+    out, elapsed = timed(
+        "merge_train",
+        lambda: merge_generated_shards(
+            train_shards,
+            train_path(level, args.episodes),
+            args.episodes,
+            env_id(level),
+            1,
+            args.force,
+        ),
+    )
+    print(out, flush=True)
+    train_merge_elapsed = elapsed
+
+    out, elapsed = timed(
+        "merge_valid",
+        lambda: merge_generated_shards(
+            valid_shards,
+            valid_path(level, args.val_episodes),
+            args.val_episodes,
+            env_id(level),
+            1_000_000_000,
+            args.force,
+        ),
+    )
+    print(out, flush=True)
+
+    timings = [
+        (level, "merge_train", train_merge_elapsed),
+        (level, "merge_valid", elapsed),
+        ("ALL", "demo_sharded", time.time() - command_start),
+    ]
+    summarize([level], args.episodes, args.epochs, timings)
+
+
 def run_train_command(args: argparse.Namespace) -> None:
     levels = selected_levels(args)
     command_start = time.time()
@@ -467,6 +638,12 @@ def parse_args() -> argparse.Namespace:
     add_common_args(demo)
     demo.add_argument("--num-workers", type=int, default=4)
 
+    demo_sharded = subparsers.add_parser("demo-sharded", help="Generate one level's demos across multiple Ray workers.")
+    add_common_args(demo_sharded)
+    demo_sharded.add_argument("--num-workers", type=int, default=4)
+    demo_sharded.add_argument("--shards", type=int, default=4)
+    demo_sharded.add_argument("--valid-shards", type=int, default=None)
+
     train = subparsers.add_parser("train", help="Train from existing demos only.")
     add_common_args(train)
     train.add_argument("--num-workers", type=int, default=1)
@@ -487,6 +664,8 @@ def main() -> None:
     args = parse_args()
     if args.command == "demo":
         run_demo_command(args)
+    elif args.command == "demo-sharded":
+        run_demo_sharded_command(args)
     elif args.command == "train":
         run_train_command(args)
     elif args.command == "run-level":
