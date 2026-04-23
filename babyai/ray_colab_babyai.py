@@ -26,6 +26,7 @@ import csv
 import json
 import os
 import pickle
+import re
 import subprocess
 import sys
 import time
@@ -201,22 +202,36 @@ def child_env(force_cpu: bool = True) -> dict[str, str]:
     return env
 
 
-def run(cmd: list[str], force_cpu: bool = True) -> str:
-    proc = subprocess.run(
+def run(cmd: list[str], force_cpu: bool = True, stream_callback=None) -> str:
+    proc = subprocess.Popen(
         cmd,
         cwd=ROOT,
         env=child_env(force_cpu=force_cpu),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        bufsize=1,
     )
+    captured_lines: list[str] = []
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        captured_lines.append(line)
+        if stream_callback is not None:
+            stream_callback(line.rstrip("\n"))
+    proc.wait()
+    output = "".join(captured_lines)
     if proc.returncode != 0:
         raise RuntimeError(
             "Command failed with exit code "
             f"{proc.returncode}: {' '.join(cmd)}\n\n"
-            f"Captured output:\n{proc.stdout}"
+            f"Captured output:\n{output}"
         )
-    return proc.stdout
+    return output
+
+
+TRAIN_BATCH_RE = re.compile(r"batch\s+(\d+), FPS so far")
+TRAIN_EPOCH_RE = re.compile(r"\bU\s+(\d+)\s+\|")
+VALIDATION_RE = re.compile(r"Validation:\s+A\s+([0-9.]+)\s+\|\s+R\s+([0-9.]+)\s+\|\s+S\s+([0-9.]+)")
 
 
 def generate_level(level: str, episodes: int, val_episodes: int, max_steps: int, force: bool) -> str:
@@ -340,11 +355,18 @@ def train_level(
 
     train_native = STORAGE / "demos" / f"{name}.pkl"
     valid_native = STORAGE / "demos" / f"{name}_valid.pkl"
+    outputs.append(
+        "status: preparing native demo files "
+        f"(train={train_native.name}, valid={valid_native.name})"
+    )
 
     train_native_count = count_native_demos(train_native)
     if not force and train_native_count is not None and train_native_count >= episodes:
         outputs.append(f"using existing {train_native} ({train_native_count} demos)")
     else:
+        outputs.append(
+            f"status: converting train demos from {train_path(level, episodes).name}"
+        )
         out, elapsed = timed("convert_train", lambda: run([
                 sys.executable,
                 "convert_bot_demos_to_babyai.py",
@@ -362,6 +384,9 @@ def train_level(
     if not force and valid_native_count is not None and valid_native_count >= val_episodes:
         outputs.append(f"using existing {valid_native} ({valid_native_count} demos)")
     else:
+        outputs.append(
+            f"status: converting valid demos from {valid_path(level, val_episodes).name}"
+        )
         out, elapsed = timed("convert_valid", lambda: run([
                 sys.executable,
                 "convert_bot_demos_to_babyai.py",
@@ -377,34 +402,72 @@ def train_level(
 
     if done_epochs > 0:
         outputs.append(f"resuming {model} from epoch {done_epochs}/{epochs}")
+    outputs.append(
+        "status: starting BabyAI training "
+        f"(model={model}, epochs={epochs}, batch_size={batch_size}, "
+        f"val_episodes={val_episodes}, cpu_only={force_cpu})"
+    )
+    state = {"epoch": done_epochs, "batch": None}
+
+    def stream_train_status(line: str) -> None:
+        batch_match = TRAIN_BATCH_RE.search(line)
+        if batch_match:
+            state["batch"] = int(batch_match.group(1))
+            epoch_display = state["epoch"] if state["epoch"] else "starting"
+            print(
+                f"[{level}] epoch {epoch_display}/{epochs} batch {state['batch']}",
+                flush=True,
+            )
+            return
+
+        epoch_match = TRAIN_EPOCH_RE.search(line)
+        if epoch_match:
+            state["epoch"] = int(epoch_match.group(1))
+            state["batch"] = None
+            print(
+                f"[{level}] completed epoch {state['epoch']}/{epochs}",
+                flush=True,
+            )
+            return
+
+        validation_match = VALIDATION_RE.search(line)
+        if validation_match:
+            print(
+                f"[{level}] validation after epoch {state['epoch']}/{epochs}: "
+                f"acc={validation_match.group(1)} "
+                f"reward={validation_match.group(2)} "
+                f"success={validation_match.group(3)}",
+                flush=True,
+            )
+
     out, elapsed = timed("train", lambda: run([
-            sys.executable,
-            str(BABYAI_SRC / "scripts" / "train_il.py"),
-            "--env",
-            env_id(level),
-            "--demos",
-            name,
-            "--episodes",
-            str(episodes),
-            "--model",
-            model,
-            "--epochs",
-            str(epochs),
-            "--epoch-length",
-            str(epoch_length),
-            "--batch-size",
-            str(batch_size),
-            "--val-episodes",
-            str(val_episodes),
-            "--log-interval",
-            "1",
-            "--val-interval",
-            "1",
-            "--patience",
-            str(patience),
-            "--save-interval",
-            "0",
-        ], force_cpu=force_cpu))
+        sys.executable,
+        str(BABYAI_SRC / "scripts" / "train_il.py"),
+        "--env",
+        env_id(level),
+        "--demos",
+        name,
+        "--episodes",
+        str(episodes),
+        "--model",
+        model,
+        "--epochs",
+        str(epochs),
+        "--epoch-length",
+        str(epoch_length),
+        "--batch-size",
+        str(batch_size),
+        "--val-episodes",
+        str(val_episodes),
+        "--log-interval",
+        "1",
+        "--val-interval",
+        "1",
+        "--patience",
+        str(patience),
+        "--save-interval",
+        "0",
+    ], force_cpu=force_cpu, stream_callback=stream_train_status))
     outputs.append(out)
     outputs.append(f"training elapsed: {format_duration(elapsed)}")
 
@@ -564,8 +627,14 @@ def run_train_command(args: argparse.Namespace) -> None:
     command_start = time.time()
     ray = init_ray(args.num_workers)
     train_task = ray.remote(num_cpus=args.cpus_per_train)(train_level)
-    refs = [
-        train_task.remote(
+    refs_by_level = {}
+    for level in levels:
+        print(
+            f"queued training task for {level} "
+            f"(cpus_per_train={args.cpus_per_train}, use_gpu={args.use_gpu})",
+            flush=True,
+        )
+        refs_by_level[level] = train_task.remote(
             level,
             args.episodes,
             args.val_episodes,
@@ -576,14 +645,18 @@ def run_train_command(args: argparse.Namespace) -> None:
             not args.use_gpu,
             args.force,
         )
-        for level in levels
-    ]
     timings: list[tuple[str, str, float]] = []
-    for level, ref in zip(levels, refs):
-        start = time.time()
-        print(ray.get(ref), flush=True)
-        elapsed = time.time() - start
+    start_times = {level: time.time() for level in levels}
+    pending = dict(refs_by_level)
+    while pending:
+        ready, _ = ray.wait(list(pending.values()), num_returns=1)
+        ready_ref = ready[0]
+        level = next(name for name, ref in pending.items() if ref == ready_ref)
+        print(f"completed training task for {level}", flush=True)
+        print(ray.get(ready_ref), flush=True)
+        elapsed = time.time() - start_times[level]
         timings.append((level, "train_wait", elapsed))
+        del pending[level]
     timings.append(("ALL", "train_total", time.time() - command_start))
     summarize(levels, args.episodes, args.epochs, timings)
 
