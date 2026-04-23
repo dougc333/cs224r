@@ -18,6 +18,7 @@ import argparse
 import gzip
 import pickle
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -138,6 +139,8 @@ def generate_demos(
 
     demos: list[Episode] = []
     attempts = 0
+    start_time = time.time()
+    last_log_time = start_time
 
     while len(demos) < episodes:
         episode_seed = seed + attempts
@@ -149,7 +152,17 @@ def generate_demos(
 
         demos.append(episode)
         if len(demos) % 100 == 0:
-            print(f"collected {len(demos)}/{episodes} successful demos")
+            now = time.time()
+            elapsed = now - start_time
+            interval = now - last_log_time
+            last_log_time = now
+            rate = 100 / interval if interval > 0 else float("inf")
+            print(
+                f"collected {len(demos)}/{episodes} successful demos "
+                f"| elapsed {elapsed:.1f}s | last100 {interval:.1f}s "
+                f"| rate {rate:.2f} demos/s",
+                flush=True,
+            )
 
     with gzip.open(output_path, "wb") as f:
         pickle.dump(

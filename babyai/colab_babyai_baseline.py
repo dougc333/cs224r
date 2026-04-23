@@ -98,6 +98,7 @@ def setup() -> None:
 
     write_file(ROOT / "generate_bot_demos.py", GENERATE_BOT_DEMOS)
     write_file(ROOT / "convert_bot_demos_to_babyai.py", CONVERT_DEMOS)
+    print_torch_diagnostics()
     print("Setup complete. If Colab runtime is GPU-enabled, torch.cuda.is_available() should be True.")
 
 
@@ -118,6 +119,19 @@ def run_with_env(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True, cwd=ROOT, env=child_env())
 
 
+def print_torch_diagnostics() -> None:
+    run([
+        sys.executable,
+        "-c",
+        "import torch; "
+        "print('torch_version', torch.__version__); "
+        "print('cuda_available', torch.cuda.is_available()); "
+        "print('cuda_device_count', torch.cuda.device_count()); "
+        "print('cuda_device', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE'); "
+        "print('cuda_mem_allocated_mb', round(torch.cuda.memory_allocated(0)/1024/1024, 2) if torch.cuda.is_available() else 0)",
+    ])
+
+
 def ensure_demos(level: str, episodes: int, val_episodes: int, max_steps: int) -> tuple[Path, Path]:
     DEMOS.mkdir(exist_ok=True)
     train = DEMOS / f"{level}_{episodes}.pkl.gz"
@@ -131,6 +145,7 @@ def ensure_demos(level: str, episodes: int, val_episodes: int, max_steps: int) -
 
 
 def train_level(level: str, args: argparse.Namespace) -> None:
+    print(f"Preparing demos for {level}. This phase is CPU-only because the hand-coded bot and Gym env run on CPU.", flush=True)
     train_gz, valid_gz = ensure_demos(level, args.episodes, args.val_episodes, args.max_steps)
     demo_name = f"{level.lower()}_{args.episodes}"
     STORAGE.joinpath("demos").mkdir(parents=True, exist_ok=True)
@@ -139,6 +154,8 @@ def train_level(level: str, args: argparse.Namespace) -> None:
     run_with_env([sys.executable, "convert_bot_demos_to_babyai.py", "--input", str(valid_gz), "--output", str(STORAGE / "demos" / f"{demo_name}_valid.pkl"), "--limit", str(args.val_episodes)])
 
     model = f"{level.lower()}_il_{args.episodes // 1000}k_e{args.epochs}"
+    print(f"Training {level}. This phase should use CUDA if cuda_available is True.", flush=True)
+    print_torch_diagnostics()
     run_with_env([
         sys.executable,
         str(BABYAI_REPO / "scripts" / "train_il.py"),
@@ -200,12 +217,7 @@ def main() -> None:
         args.batch_size = 128
         args.patience = 100
 
-    run([
-        sys.executable,
-        "-c",
-        "import torch; print('cuda', torch.cuda.is_available()); "
-        "print('device', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu')",
-    ])
+    print_torch_diagnostics()
     for level in args.levels:
         print(f"\n=== {level} ===", flush=True)
         train_level(level, args)
@@ -213,7 +225,7 @@ def main() -> None:
 
 GENERATE_BOT_DEMOS = r'''#!/usr/bin/env python3
 from __future__ import annotations
-import argparse, gzip, pickle, sys
+import argparse, gzip, pickle, sys, time
 from pathlib import Path
 
 def import_runtime():
@@ -249,13 +261,24 @@ def main():
     gym, Bot = import_runtime()
     env = gym.make(args.env, disable_env_checker=True).unwrapped
     demos, attempts = [], 0
+    start_time = time.time()
+    last_log_time = start_time
     while len(demos) < args.episodes:
         ep = rollout(env, Bot, args.seed + attempts, args.max_steps)
         attempts += 1
         if ep is not None:
             demos.append(ep)
             if len(demos) % 100 == 0:
-                print(f"collected {len(demos)}/{args.episodes}", flush=True)
+                now = time.time()
+                elapsed = now - start_time
+                interval = now - last_log_time
+                last_log_time = now
+                rate = 100 / interval if interval > 0 else float("inf")
+                print(
+                    f"collected {len(demos)}/{args.episodes} | elapsed {elapsed:.1f}s "
+                    f"| last100 {interval:.1f}s | rate {rate:.2f} demos/s",
+                    flush=True,
+                )
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     pickle.dump({"env": args.env, "seed": args.seed, "attempts": attempts, "episodes": demos}, gzip.open(args.output, "wb"), protocol=pickle.HIGHEST_PROTOCOL)
     print(f"wrote {len(demos)} demos to {args.output}")
