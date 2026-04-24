@@ -1,2 +1,0 @@
-update,frames,FPS,duration,entropy,policy_loss,train_accuracy,validation_accuracy,validation_return,validation_success_rate
-1,2926,573.9145704130813,5,1.9313663244247437,1.864933341741562,0.32373425068737566,0.6192567567567568,0.0,0.0
