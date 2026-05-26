@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rl-dashboard
+  namespace: rl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rl-dashboard
+  template:
+    metadata:
+      labels:
+        app: rl-dashboard
+    spec:
+      serviceAccountName: rl-dashboard
+      containers:
+        - name: dashboard
+          image: DASHBOARD_IMAGE_PLACEHOLDER
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          env:
+            - name: K8S_NAMESPACE
+              value: "rl"
+            - name: TRAINER_IMAGE
+              value: "TRAINER_IMAGE_PLACEHOLDER"
+            - name: PROMETHEUS_URL
+              value: "http://prometheus-kube-prometheus-prometheus.monitoring:9090"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rl-dashboard
+  namespace: rl
+spec:
+  selector:
+    app: rl-dashboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer

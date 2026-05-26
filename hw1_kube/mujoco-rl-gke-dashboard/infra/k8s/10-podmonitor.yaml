@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: mujoco-rl-podmonitor
+  namespace: rl
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: mujoco-rl
+  namespaceSelector:
+    matchNames:
+      - rl
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 5s
